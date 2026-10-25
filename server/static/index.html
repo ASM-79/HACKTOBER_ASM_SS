@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ohmni</title>
+<style>
+:root{
+  --bg:#0d0f12;--panel:#15181d;--line:#262a31;--fg:#ecebe6;--mut:#8a8f98;
+  --ok:#3ddc84;--bad:#ff5b4f;--wait:#5d6370;--amber:#ffb627;--lcd:#c8f7a8;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 ui-sans-serif,system-ui,-apple-system,sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.logo{font:800 22px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.5px}
+.logo span{color:var(--amber)}
+.conn{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:13px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}
+.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.spacer{flex:1}
+select,button.sm,input[type=text]{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit}
+button.sm{cursor:pointer}
+main{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;padding:16px 20px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.camwrap{position:relative}
+video{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px;background:#000;display:block}
+.camtag{position:absolute;top:10px;left:10px;background:#000a;padding:3px 8px;border-radius:6px;font-size:12px;color:var(--mut)}
+.meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:14px}
+.meter{background:#0a1a0e;border:1px solid #1e3a24;border-radius:10px;padding:10px 14px}
+.meter .lbl{font-size:12px;color:#7fae7f;text-transform:uppercase;letter-spacing:.8px}
+.meter .val{font:600 38px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--lcd);text-shadow:0 0 10px #c8f7a855}
+.meter .val small{font-size:18px;color:#7fae7f}
+.stephead{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.stepn{color:var(--mut);font-size:13px;text-transform:uppercase;letter-spacing:.8px}
+.badge{padding:4px 12px;border-radius:999px;font-weight:700;font-size:13px}
+.badge.ok{background:var(--ok);color:#04130a}
+.badge.fault{background:var(--bad);color:#fff}
+.badge.waiting{background:var(--wait);color:#fff}
+.instr{font-size:18px;margin:10px 0 8px}
+.hint{color:var(--mut);font-size:14px;min-height:20px}
+.navs{display:flex;gap:8px;margin-top:10px}
+#ptt{width:100%;margin-top:14px;padding:20px;font-size:18px;border:0;border-radius:14px;background:var(--amber);color:#1a1200;font-weight:800;cursor:pointer;user-select:none;touch-action:none}
+#ptt.live{background:var(--bad);color:#fff;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.75}}
+.heard{color:var(--mut);font-style:italic;min-height:22px;margin:8px 2px}
+.typed{display:flex;gap:8px}
+.typed input{flex:1}
+#log{margin-top:12px;max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.msg{padding:9px 12px;border-radius:10px;background:#1e2229;max-width:92%}
+.msg.me{align-self:flex-end;background:#2a2f38;color:#c9ccd2}
+.msg.alert{border-left:3px solid var(--bad)}
+.msg.thinking{color:var(--mut)}
+.msg .lat{font-size:11px;color:var(--mut);margin-left:6px}
+#simpanel{display:none;margin-top:14px}
+#simpanel label{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--mut)}
+#simpanel input[type=range]{flex:1}
+.toggle{font-size:13px;color:var(--mut);display:flex;gap:6px;align-items:center}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Ohm<span>ni</span></div>
+  <div class="conn"><div id="dot" class="dot"></div><span id="conn">Connecting...</span></div>
+  <div class="spacer"></div>
+  <label class="toggle"><input type="checkbox" id="autohelp" checked> Speak up on faults</label>
+  <select id="lab" title="Lab"></select>
+  <select id="camsel" title="Camera"></select>
+</header>
+
+<main>
+  <section>
+    <div class="panel">
+      <div class="camwrap">
+        <video id="cam" autoplay playsinline muted></video>
+        <div class="camtag">bench cam</div>
+      </div>
+      <div class="meters" id="meters"></div>
+      <div id="simpanel"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="panel">
+      <div class="stephead"><div class="stepn" id="stepn"></div><div id="badge" class="badge waiting">Waiting</div></div>
+      <div class="instr" id="instr"></div>
+      <div class="hint" id="hint"></div>
+      <div class="navs">
+        <button class="sm" id="prev">Back</button>
+        <button class="sm" id="next">Next step</button>
+      </div>
+    </div>
+
+    <button id="ptt">Hold to talk (Space or bench button)</button>
+    <div class="heard" id="heard"></div>
+    <div class="typed"><input type="text" id="typed" placeholder="Or type a question and press Enter"></div>
+    <div id="log"></div>
+  </section>
+</main>
+<canvas id="snap" hidden></canvas>
+
+<script>
+const $ = s => document.querySelector(s);
+let labs = {}, busy = false, seenAlert = null, lastPtt = 0, simBuilt = false;
+
+async function api(path, body) {
+  const r = await fetch(path, body ? {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)} : {});
+  return r.json();
+}
+
+/* ---------- camera ---------- */
+async function startCam(deviceId) {
+  try {
+    if (window.camStream) camStream.getTracks().forEach(t => t.stop());
+    window.camStream = await navigator.mediaDevices.getUserMedia({
+      video: deviceId ? {deviceId: {exact: deviceId}} : {width: {ideal: 1280}}, audio: false});
+    $('#cam').srcObject = camStream;
+  } catch (e) { console.warn('camera unavailable', e); }
+}
+async function setupCameras() {
+  await startCam();
+  try {
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    const sel = $('#camsel'); sel.innerHTML = '';
+    devs.forEach((d, i) => sel.add(new Option(d.label || ('Camera ' + (i + 1)), d.deviceId)));
+    sel.onchange = () => startCam(sel.value);
+  } catch (e) {}
+}
+function snap() {
+  const v = $('#cam'); if (!v.videoWidth) return null;
+  const w = 768, h = Math.round(v.videoHeight * w / v.videoWidth);
+  const c = $('#snap'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(v, 0, 0, w, h);
+  return c.toDataURL('image/jpeg', 0.7).split(',')[1];
+}
+
+/* ---------- live state ---------- */
+function connectWS() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = e => render(JSON.parse(e.data));
+  ws.onclose = () => setTimeout(connectWS, 1000);
+}
+const STATUS_TEXT = {ok: 'Looks good', fault: 'Something is off', waiting: 'Waiting'};
+function render(s) {
+  $('#dot').classList.toggle('on', s.connected);
+  $('#conn').textContent = (s.connected ? (s.sim ? 'Simulated probe' : 'Probe connected') : 'Probe not connected') + ' · ' + s.model;
+  const lab = labs[s.lab]; if (!lab) return;
+  if ($('#lab').value !== s.lab) $('#lab').value = s.lab;
+
+  $('#meters').innerHTML = Object.entries(lab.probes).map(([k, name]) => {
+    const mv = s.v[+k.slice(1) - 1];
+    return `<div class="meter"><div class="lbl">${k} · ${name}</div><div class="val">${(mv / 1000).toFixed(2)}<small> V</small></div></div>`;
+  }).join('');
+
+  const st = lab.steps[s.step];
+  $('#stepn').textContent = `${lab.title} · Step ${s.step + 1} of ${lab.steps.length}`;
+  $('#instr').textContent = st.instruction;
+  const b = $('#badge'); b.className = 'badge ' + s.status; b.textContent = s.thinking ? 'Thinking...' : STATUS_TEXT[s.status];
+  $('#hint').textContent = s.hint || '';
+
+  // bench push-to-talk button
+  if (s.ptt && !lastPtt) pttDown();
+  if (!s.ptt && lastPtt) pttUp();
+  lastPtt = s.ptt;
+
+  // proactive help when something breaks
+  if (seenAlert === null) seenAlert = s.alert_id;
+  else if (s.alert_id !== seenAlert) {
+    seenAlert = s.alert_id;
+    if ($('#autohelp').checked) ask('', true);
+  }
+
+  if (s.sim && !simBuilt) buildSim(s.v);
+}
+
+/* ---------- voice ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, heard = '', live = false;
+function pttDown() {
+  if (live) return; live = true; heard = '';
+  speechSynthesis.cancel();
+  $('#ptt').classList.add('live'); $('#ptt').textContent = 'Listening... release to ask';
+  $('#heard').textContent = '';
+  if (!SR) { $('#heard').textContent = 'Voice needs Chrome. Type below instead.'; return; }
+  rec = new SR(); rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
+  rec.onresult = e => { heard = Array.from(e.results).map(r => r[0].transcript).join(' '); $('#heard').textContent = heard; };
+  rec.onend = () => { const t = heard.trim(); rec = null; if (t) ask(t, false); };
+  rec.start();
+}
+function pttUp() {
+  if (!live) return; live = false;
+  $('#ptt').classList.remove('live'); $('#ptt').textContent = 'Hold to talk (Space or bench button)';
+  if (rec) rec.stop();
+}
+function speak(t) {
+  const u = new SpeechSynthesisUtterance(t); u.rate = 1.05;
+  speechSynthesis.speak(u);
+}
+
+/* ---------- asking Gemma ---------- */
+function addMsg(text, cls) {
+  const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text;
+  $('#log').appendChild(d); $('#log').scrollTop = 1e9; return d;
+}
+async function ask(text, auto) {
+  if (busy) return; busy = true;
+  addMsg(auto ? 'Ohmni noticed something on the meter' : text, auto ? 'me alert' : 'me');
+  const pending = addMsg('Looking at your bench...', 'thinking');
+  try {
+    const r = await api('/api/ask', {text, auto, image: snap()});
+    pending.textContent = r.reply; pending.className = 'msg';
+    const lat = document.createElement('span'); lat.className = 'lat'; lat.textContent = r.latency + 's';
+    pending.appendChild(lat);
+    speak(r.reply);
+  } catch (e) {
+    pending.textContent = 'Error: ' + e; pending.className = 'msg';
+  } finally { busy = false; }
+}
+
+/* ---------- sim sliders (SIM=1 only) ---------- */
+function buildSim(v) {
+  simBuilt = true;
+  const p = $('#simpanel'); p.style.display = 'block';
+  p.innerHTML = '<div class="stepn" style="margin-bottom:6px">Simulated probes (mV)</div>' +
+    [0, 1, 2, 3].map(i => `<label>P${i + 1}<input type="range" min="0" max="3300" step="10" value="${v[i]}" data-i="${i}"><span id="sv${i}">${v[i]}</span></label>`).join('') +
+    '<label><input type="checkbox" id="simptt"> bench button held</label>';
+  const push = () => {
+    const vals = [...p.querySelectorAll('input[type=range]')].map(r => { $('#sv' + r.dataset.i).textContent = r.value; return +r.value; });
+    api('/api/sim', {v: vals, ptt: $('#simptt').checked ? 1 : 0});
+  };
+  p.querySelectorAll('input').forEach(el => el.oninput = push);
+}
+
+/* ---------- wiring up ---------- */
+async function init() {
+  labs = await api('/api/labs');
+  const sel = $('#lab');
+  for (const [id, l] of Object.entries(labs)) sel.add(new Option(l.title, id));
+  sel.onchange = () => { api('/api/lab', {lab: sel.value}); $('#log').innerHTML = ''; };
+  $('#next').onclick = () => api('/api/step', {delta: 1});
+  $('#prev').onclick = () => api('/api/step', {delta: -1});
+
+  const ptt = $('#ptt');
+  ptt.onpointerdown = pttDown; ptt.onpointerup = pttUp; ptt.onpointerleave = pttUp;
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && !e.repeat && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); pttDown(); }
+  });
+  document.addEventListener('keyup', e => {
+    if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); pttUp(); }
+  });
+  $('#typed').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.value.trim()) { ask(e.target.value.trim(), false); e.target.value = ''; }
+  });
+
+  connectWS();
+  setupCameras();
+}
+init();
+</script>
+</body>
+</html>
