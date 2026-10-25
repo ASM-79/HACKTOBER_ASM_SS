@@ -27,9 +27,10 @@ import serial
 import serial.tools.list_ports
 import uvicorn
 from fastapi import FastAPI, WebSocket
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+import arduino
 from labs import HIST_LEN, LABS
 
 INSTRUMENT_PORT = os.getenv("INSTRUMENT_PORT") or os.getenv("SERIAL_PORT")
@@ -54,7 +55,13 @@ Rules:
 - Your reply is spoken aloud: at most 3 short sentences, plain words, no markdown, no lists.
 - Teach, don't just fix. Give a hint or a guiding question first. Give the full answer if the student asks directly or is stuck.
 - If the student makes a prediction, tell them whether it matches the physics and why, in one sentence.
-- If the step is OK, say so briefly and tell them what to do next."""
+- If the step is OK, say so briefly and tell them what to do next.
+The student also programs a target board (usually an ESP32) from inside Ohmni. When you get their sketch,
+compiler errors, or serial output, connect the code to the circuit: for example, "your code drives pin 13,
+but P2 on the LED row reads 0 V, and in the photo the LED wire goes to pin 12."
+- Refer to code by line number. Quote at most one short line of code.
+- After a failed compile, give a one-sentence hint that points at the line and the idea, not the fixed code,
+  unless the student asks for the answer."""
 
 app = FastAPI()
 lock = threading.Lock()
@@ -68,7 +75,10 @@ state = {
 }
 target = {"port": os.getenv("TARGET_PORT") or (SIM_TARGET if SIM else None), "fqbn": "esp32:esp32:esp32", "baud": 115200}
 target_ver = 0  # bumped whenever the target config changes so the monitor reopens the port
-sim_input = {"v": [3300, 1650, 0, 0], "ptt": 0}
+sim_input = {"v": [3300, 1650, 0, 0], "ptt": 0, "wave": []}  # wave: probe indexes that square-wave at 1 Hz
+last_compile: Optional[dict] = None  # {"ok", "errors", "fqbn", "kind"} from the most recent compile or upload
+last_code = ""
+sim_sketch = ""
 _ser: Optional[serial.Serial] = None
 _last_led: Optional[str] = None
 _fault_since: Optional[float] = None
@@ -244,7 +254,9 @@ def instrument_loop():
 def sim_loop():
     import random
     while True:
-        ingest([max(0, x + random.randint(-15, 15)) for x in sim_input["v"]], sim_input["ptt"])
+        high = int(time.time() * 2) % 2 == 0
+        v = [(3300 if high else 0) if i in sim_input["wave"] else x for i, x in enumerate(sim_input["v"])]
+        ingest([max(0, x + random.randint(-15, 15)) for x in v], sim_input["ptt"])
         time.sleep(0.1)
 
 
@@ -311,8 +323,24 @@ def target_loop():
             monitor_released.set()
 
 
+SERIAL_LITERAL = re.compile(r'Serial\.print(?:ln)?\(\s*"((?:[^"\\]|\\.)*)"')
+
+
 def sim_target_loop():
+    """SIM stand-in for the target board: echoes the uploaded sketch's Serial.print text. Nothing is executed."""
     push_serial("[sim] ESP32 target idle. Upload a sketch from the Code tab.")
+    shown, i = None, 0
+    while True:
+        time.sleep(1)
+        if not sim_sketch:
+            continue
+        if sim_sketch is not shown:
+            shown, i = sim_sketch, 0
+            push_serial("[sim] Sketch uploaded (simulated). Echoing its Serial.print text, nothing runs on this laptop.")
+        lits = SERIAL_LITERAL.findall(sim_sketch)
+        if lits:
+            push_serial(lits[i % len(lits)])
+            i += 1
 
 
 # ---------------- API ----------------
@@ -328,12 +356,21 @@ class StepReq(BaseModel):
 class AskReq(BaseModel):
     text: str = ""
     auto: bool = False
+    mode: str = "ask"            # ask | auto | compile_hint
     image: Optional[str] = None  # base64 JPEG, no data: prefix
+    code: Optional[str] = None   # the sketch currently in the editor
 
 
 class SimReq(BaseModel):
     v: list
     ptt: int = 0
+    wave: list = []
+
+
+class BuildReq(BaseModel):
+    session: str
+    code: str
+    fqbn: Optional[str] = None
 
 
 class TargetReq(BaseModel):
@@ -356,7 +393,7 @@ def index():
 @app.get("/api/labs")
 def labs():
     return {k: {"title": l["title"], "goal": l["goal"], "probes": l["probes"],
-                "steps": [{"instruction": s["instruction"]} for s in l["steps"]]}
+                "steps": [{"instruction": s["instruction"], "starter": s.get("starter")} for s in l["steps"]]}
             for k, l in LABS.items()}
 
 
@@ -386,6 +423,7 @@ def move_step(r: StepReq):
 def sim(r: SimReq):
     sim_input["v"] = [int(x) for x in r.v[:4]]
     sim_input["ptt"] = r.ptt
+    sim_input["wave"] = [int(i) for i in r.wave if 0 <= int(i) < 4]
     return {"ok": True}
 
 
@@ -411,42 +449,119 @@ def choose_target(r: TargetReq):
     return {"ok": True, "target": dict(target)}
 
 
+SKETCH_MAX_LINES = 160
+PIN_CALL = re.compile(r"\b(pinMode|digitalWrite|digitalRead|analogRead|analogWrite)\s*\(\s*(\w+)")
+PIN_CONST = re.compile(r"(?:#define\s+(\w+)\s+(\d+))|(?:\b(?:int|byte|uint8_t|short|long)\s+(\w+)\s*=\s*(\d+))")
+
+
+def number_sketch(code: str) -> str:
+    """Sketch with line numbers so Gemma can match compiler errors, trimmed to a sane length."""
+    lines = code.splitlines()
+    shown = [f"{n:>3}| {ln}" for n, ln in enumerate(lines[:SKETCH_MAX_LINES], 1)]
+    if len(lines) > SKETCH_MAX_LINES:
+        shown.append(f"... ({len(lines) - SKETCH_MAX_LINES} more lines trimmed)")
+    return "\n".join(shown)
+
+
+def sketch_pins(code: str) -> str:
+    """Which pins the sketch touches, with constants resolved: 'pinMode(LED_PIN=13), digitalWrite(LED_PIN=13)'."""
+    consts = {}
+    for m in PIN_CONST.finditer(code):
+        name, val = (m[1], m[2]) if m[1] else (m[3], m[4])
+        consts[name] = val
+    seen = []
+    for fn, arg in PIN_CALL.findall(code):
+        item = f"{fn}({arg}={consts[arg]})" if arg in consts else f"{fn}({arg})"
+        if item not in seen:
+            seen.append(item)
+    return ", ".join(seen)
+
+
+def describe_compile(res: Optional[dict]) -> str:
+    if not res:
+        return "Last compile: not compiled yet."
+    if res.get("ok"):
+        return f"Last compile: succeeded for {res.get('fqbn')}" + (" and uploaded." if res.get("kind") == "upload" else ".")
+    errs = [e for e in res.get("errors", []) if e["severity"] == "error"][:6]
+    if not errs:
+        return f"Last compile: failed. {res.get('message') or res.get('install') or ''}".strip()
+    return "Last compile: FAILED with errors:\n" + "\n".join(f"  line {e['line']}: {e['message']}" for e in errs)
+
+
+def build_messages(*, lab: dict, step_i: int, v: list, status: str, hint: str, question: str = "",
+                   mode: str = "ask", code: str = "", compile_result: Optional[dict] = None,
+                   serial_tail=(), image: Optional[str] = None, history=()) -> list:
+    """Everything Gemma sees for one turn: step, probe readings, checker, sketch, compile result, serial, photo."""
+    step = lab["steps"][step_i]
+    readings = ", ".join(f"{k} ({name}) = {v[int(k[1]) - 1] / 1000:.2f} V" for k, name in lab["probes"].items())
+    parts = [
+        f"Lab: {lab['title']}. Goal: {lab['goal']}",
+        f"Current step {step_i + 1} of {len(lab['steps'])}: {step['instruction']}",
+        f"Live probe readings (Uno instrument): {readings}",
+        f"Checker status: {status}. Checker diagnosis: {hint or 'none'}",
+    ]
+    if code.strip():
+        pins = sketch_pins(code)
+        parts.append("Student sketch for the target board (sketch.ino):\n" + number_sketch(code))
+        if pins:
+            parts.append(f"Pins the sketch uses: {pins}")
+    else:
+        parts.append("Student sketch: none yet.")
+    parts.append(describe_compile(compile_result))
+    tail = list(serial_tail)[-40:]
+    parts.append(("Recent serial output from the target board (last 40 lines):\n" + "\n".join(tail))
+                 if tail else "Recent serial output from the target board: none.")
+    parts.append("A photo of the breadboard is attached." if image else "No photo this turn.")
+    if mode == "auto":
+        parts.append("The checker just detected a problem and the student has not asked yet. Speak up: say what "
+                     "seems wrong and the single first thing to check.")
+    elif mode == "compile_hint":
+        parts.append("The compile just failed and the student has not asked yet. Give ONE sentence: a hint that "
+                     "points at the line and the idea. Do not write the fixed code.")
+    else:
+        parts.append(f'The student said: "{question}"')
+    msg = {"role": "user", "content": "\n".join(parts)}
+    if image:
+        msg["images"] = [image]
+    return [{"role": "system", "content": SYSTEM}] + list(history) + [msg]
+
+
+def mock_reply(mode: str, hint: str, compile_result: Optional[dict]) -> str:
+    errs = [e for e in (compile_result or {}).get("errors", []) if e["severity"] == "error"]
+    if mode == "compile_hint" and errs:
+        return f"Hint: look at line {errs[0]['line']}. The compiler is telling you {errs[0]['message'].split(';')[0]}."
+    return f"Mock Gemma here. The meter says: {hint or 'everything reads as expected'}."
+
+
+def call_model(messages: list) -> str:
+    r = requests.post(f"{OLLAMA_URL}/api/chat", timeout=120, json={
+        "model": MODEL, "messages": messages, "stream": False,
+        "options": {"temperature": 0.3, "num_ctx": 8192},
+    })
+    r.raise_for_status()
+    reply = r.json()["message"]["content"]
+    return re.sub(r"<think>.*?</think>", "", reply, flags=re.S).strip() or "Hmm, I lost my train of thought. Ask me again?"
+
+
 @app.post("/api/ask")
 def ask(q: AskReq):
+    global last_code
+    mode = "auto" if q.auto else q.mode
     with lock:
         lab = LABS[state["lab"]]
         i = state["step"]
-        step = lab["steps"][i]
         v = list(state["v"])
         status, hint = state["status"], state["hint"]
         state["thinking"] = True
         set_led("y")
-
-    readings = ", ".join(f"{k} ({name}) = {v[int(k[1]) - 1] / 1000:.2f} V" for k, name in lab["probes"].items())
-    ctx = (f"Lab: {lab['title']}. Goal: {lab['goal']}\n"
-           f"Current step {i + 1} of {len(lab['steps'])}: {step['instruction']}\n"
-           f"Live probe readings: {readings}\n"
-           f"Checker status: {status}. Checker diagnosis: {hint or 'none'}")
-    if q.auto:
-        ctx += ("\nThe checker just detected a problem and the student has not asked yet. Speak up: say what "
-                "seems wrong and the single first thing to check.")
-    else:
-        ctx += f'\nThe student said: "{q.text}"'
-
-    msg = {"role": "user", "content": ctx}
-    if q.image:
-        msg["images"] = [q.image]
-    messages = [{"role": "system", "content": SYSTEM}] + list(chat) + [msg]
-
+    if q.code is not None:
+        last_code = q.code
+    messages = build_messages(lab=lab, step_i=i, v=v, status=status, hint=hint, question=q.text, mode=mode,
+                              code=last_code, compile_result=last_compile, serial_tail=recent_serial(40),
+                              image=q.image, history=chat)
     t0 = time.time()
     try:
-        r = requests.post(f"{OLLAMA_URL}/api/chat", timeout=120, json={
-            "model": MODEL, "messages": messages, "stream": False,
-            "options": {"temperature": 0.3, "num_ctx": 8192},
-        })
-        r.raise_for_status()
-        reply = r.json()["message"]["content"]
-        reply = re.sub(r"<think>.*?</think>", "", reply, flags=re.S).strip() or "Hmm, I lost my train of thought. Ask me again?"
+        reply = mock_reply(mode, hint, last_compile) if MOCK_MODEL else call_model(messages)
     except Exception as e:
         print(f"[ohmni] model error: {e}")
         reply = f"I can't reach the model right now. Here's what the meter says: {hint or status}."
@@ -455,9 +570,44 @@ def ask(q: AskReq):
             state["thinking"] = False
             evaluate()
 
-    chat.append({"role": "user", "content": ctx})
+    asked = {"auto": "(Ohmni spoke up about a fault)", "compile_hint": "(Ohmni hinted after a failed compile)"}
+    chat.append({"role": "user", "content": asked.get(mode, q.text)})
     chat.append({"role": "assistant", "content": reply})
     return {"reply": reply, "latency": round(time.time() - t0, 1)}
+
+
+def _ndjson(events, kind: str, fqbn: str, code: str):
+    """Stream build events to the browser and remember the result for Gemma."""
+    global last_compile, last_code, sim_sketch
+    last_code = code
+    for ev in events:
+        if ev["type"] == "result":
+            last_compile = {"ok": ev["ok"], "errors": ev.get("errors", []), "fqbn": fqbn, "kind": kind,
+                            "message": ev.get("message"), "install": ev.get("install")}
+            if kind == "upload" and ev["ok"] and ev.get("sim"):
+                sim_sketch = code
+        yield json.dumps(ev) + "\n"
+
+
+@app.get("/api/tools")
+def tools(fqbn: str = "esp32:esp32:esp32"):
+    if fqbn not in arduino.CORES:
+        return {"error": f"Unknown board {fqbn}"}
+    return {"ok": True, "fqbn": fqbn} if not (m := arduino.check_tools(fqbn)) else {"ok": False, "fqbn": fqbn, **m}
+
+
+@app.post("/api/compile")
+def compile_sketch(r: BuildReq):
+    fqbn = r.fqbn or target["fqbn"]
+    return StreamingResponse(_ndjson(arduino.compile_events(r.session, r.code, fqbn), "compile", fqbn, r.code),
+                             media_type="application/x-ndjson")
+
+
+@app.post("/api/upload")
+def upload_sketch(r: BuildReq):
+    fqbn = r.fqbn or target["fqbn"]
+    events = arduino.upload_events(r.session, r.code, fqbn, target["port"], SIM, pause=pause_monitor, resume=resume_monitor)
+    return StreamingResponse(_ndjson(events, "upload", fqbn, r.code), media_type="application/x-ndjson")
 
 
 @app.websocket("/ws")
@@ -483,7 +633,7 @@ async def ws(sock: WebSocket):
 def start_background():
     if SIM:
         threading.Thread(target=sim_loop, daemon=True).start()
-        sim_target_loop()
+        threading.Thread(target=sim_target_loop, daemon=True).start()
     else:
         threading.Thread(target=instrument_loop, daemon=True).start()
         threading.Thread(target=target_loop, daemon=True).start()
