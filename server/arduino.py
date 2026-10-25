@@ -178,10 +178,14 @@ def compile_events(sid: str, code: str, fqbn: str, timeout: float = None) -> Ite
         cmd = cli_cmd() + ["compile", "--no-color", "--fqbn", fqbn, "--build-path", str(build), str(sketch)]
         yield {"type": "start", "cmd": f"arduino-cli compile --fqbn {fqbn} sketch"}
         lines, t0 = [], time.time()
+        prefixes = {str(sketch) + os.sep, str(sketch.resolve()) + os.sep}
         for ev in run_streaming(cmd, timeout, cwd=str(sketch.parent)):
             if ev[0] == "out":
-                lines.append(ev[1])
-                yield {"type": "out", "text": ev[1]}
+                text = ev[1]
+                for pre in prefixes:  # show "sketch.ino:6:5: error" instead of the temp folder path
+                    text = text.replace(pre, "")
+                lines.append(text)
+                yield {"type": "out", "text": text}
             else:
                 code_rc, timed_out = ev[1], ev[2]
         output = "\n".join(lines)

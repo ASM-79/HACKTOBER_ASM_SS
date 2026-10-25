@@ -225,22 +225,30 @@ def run_instrument(s: serial.Serial, port: str):
             state["connected"], state["instrument_port"] = False, None
 
 
+def sniff_instrument(port: str) -> Optional[serial.Serial]:
+    """Open a port and keep it only if it streams Ohmni probe JSON within SNIFF_S seconds."""
+    try:
+        s = open_port(port, 115200)
+    except Exception:
+        return None
+    lines, t0 = [], time.time()
+    try:
+        while time.time() - t0 < SNIFF_S and not looks_like_instrument(lines):
+            lines.append(s.readline().decode(errors="ignore"))
+    except Exception:
+        pass
+    if looks_like_instrument(lines):
+        return s
+    s.close()
+    return None
+
+
 def instrument_loop():
     while True:
         cands = [INSTRUMENT_PORT] if INSTRUMENT_PORT else candidate_ports(system_ports(), exclude={target["port"]})
         for port in cands:
-            try:
-                s = open_port(port, 115200)
-            except Exception:
-                continue
-            lines, t0 = [], time.time()
-            try:
-                while time.time() - t0 < SNIFF_S and not looks_like_instrument(lines):
-                    lines.append(s.readline().decode(errors="ignore"))
-            except Exception:
-                pass
-            if not looks_like_instrument(lines):
-                s.close()
+            s = sniff_instrument(port)
+            if not s:
                 continue
             new_target = auto_target(candidate_ports(system_ports()), port, target["port"])
             if new_target and new_target != target["port"]:
@@ -530,7 +538,7 @@ def mock_reply(mode: str, hint: str, compile_result: Optional[dict]) -> str:
     errs = [e for e in (compile_result or {}).get("errors", []) if e["severity"] == "error"]
     if mode == "compile_hint" and errs:
         return f"Hint: look at line {errs[0]['line']}. The compiler is telling you {errs[0]['message'].split(';')[0]}."
-    return f"Mock Gemma here. The meter says: {hint or 'everything reads as expected'}."
+    return f"Mock Gemma here. The meter says: {(hint or 'everything reads as expected').rstrip('.')}."
 
 
 def call_model(messages: list) -> str:

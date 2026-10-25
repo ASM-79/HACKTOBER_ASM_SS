@@ -108,16 +108,16 @@ input[type=checkbox],input[type=range]{accent-color:var(--twilight)}
 .msg{padding:12px 16px;border-radius:12px;background:var(--paper);border:1px solid var(--mist);max-width:92%;color:var(--ink)}
 .msg.me{align-self:flex-end;background:var(--linen);color:var(--charcoal)}
 .msg.thinking{color:var(--ash)}
-.msg .lat{font-size:13px;color:var(--ash);margin-left:8px;font-variant-numeric:tabular-nums}
+.msg .lat{font-size:13px;color:var(--ash);margin-left:8px;font-variant-numeric:tabular-nums;white-space:nowrap}
 
 /* code tab */
 .console{margin:8px 0 0;background:var(--linen);border-bottom:1px solid var(--mist);padding:8px 12px;height:120px;overflow:auto;
   font:400 13px/1.5 var(--mono);color:var(--charcoal);white-space:pre-wrap;word-break:break-word}
 
-#editor,#codearea{width:100%;height:300px;margin-top:12px;border-bottom:1px solid var(--mist);background:var(--linen)}
+#editor,#codearea{width:100%;height:260px;margin-top:12px;border-bottom:1px solid var(--mist);background:var(--linen)}
 #codearea{display:block;border:0;border-bottom:1px solid var(--mist);border-radius:0;padding:8px 12px;resize:vertical;outline:none;
   font:400 13px/1.5 var(--mono);color:var(--ink);tab-size:2}
-#problems{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+#problems{display:flex;flex-direction:column;gap:4px;margin-top:12px}
 #problems:empty{display:none}
 .problem{display:flex;gap:8px;align-items:baseline;font-size:13px;color:var(--charcoal);cursor:pointer;background:none;border:0;padding:0;text-align:left}
 .problem .dot{width:8px;height:8px;border-radius:50%;background:var(--fault);flex:none;transform:translateY(-1px)}
@@ -208,6 +208,12 @@ input[type=checkbox],input[type=range]{accent-color:var(--twilight)}
             <div style="flex:1"></div>
             <button class="btn secondary small" id="resetcode">Reset to starter</button>
           </div>
+          <div id="problems"></div>
+        </div>
+        <div class="card">
+          <div class="label">Ask Ohmni about your code and circuit</div>
+          <div class="log" id="codelog" style="margin:8px 0"></div>
+          <input type="text" id="codeq" placeholder="Why doesn't my LED blink? Press Enter to ask">
         </div>
         <div class="card" id="toolsmissing" hidden>
           <div class="label" id="toolsmsg"></div>
@@ -216,13 +222,7 @@ input[type=checkbox],input[type=range]{accent-color:var(--twilight)}
         </div>
         <div class="card">
           <div class="label">Compiler output</div>
-          <div id="problems"></div>
           <pre class="console" id="compileout"></pre>
-        </div>
-        <div class="card">
-          <div class="label">Ask Ohmni about your code and circuit</div>
-          <div class="log" id="codelog" style="margin:8px 0"></div>
-          <input type="text" id="codeq" placeholder="Why doesn't my LED blink? Press Enter to ask">
         </div>
         <div class="card">
           <div class="row between">
@@ -440,7 +440,9 @@ async function setupEditor() {
       {token: 'string', foreground: '444141'}, {token: 'number', foreground: '2c2c2c'}, {token: 'delimiter', foreground: '444141'}],
       colors: {'editor.background': '#f9faf7', 'editor.lineHighlightBackground': '#fefffc', 'editorLineNumber.foreground': '#b4b8b4',
         'editorLineNumber.activeForeground': '#444141', 'editorCursor.foreground': '#282834', 'editor.selectionBackground': '#dee2de',
-        'editorError.foreground': '#c2483d', 'editorWarning.foreground': '#646464', 'editorGutter.background': '#f9faf7'}});
+        'editorError.foreground': '#c2483d', 'editorWarning.foreground': '#646464',
+        'editorOverviewRuler.errorForeground': '#c2483d', 'editorOverviewRuler.warningForeground': '#b4b8b4',
+        'editorOverviewRuler.border': '#dee2de', 'scrollbarSlider.background': '#dee2de80', 'editorGutter.background': '#f9faf7'}});
     monacoEd = monaco.editor.create($('#editor'), {value: initial, language: 'cpp', theme: 'ohmni', minimap: {enabled: false},
       fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', glyphMargin: true,
       scrollBeyondLastLine: false, automaticLayout: true, tabSize: 2, renderLineHighlight: 'line', lineNumbersMinChars: 3});
@@ -537,11 +539,12 @@ function buildSim(v) {
   simBuilt = true;
   const p = $('#simpanel'); p.style.display = 'block';
   p.innerHTML = '<div class="label" style="margin-bottom:8px">Simulated probes, mV (SIM=1)</div>' +
-    [0, 1, 2, 3].map(i => `<div class="sl">P${i + 1}<input type="range" min="0" max="5000" step="10" value="${v[i]}" data-i="${i}"><span id="sv${i}">${v[i]}</span><span></span></div>`).join('') +
+    [0, 1, 2, 3].map(i => `<div class="sl">P${i + 1}<input type="range" min="0" max="5000" step="10" value="${v[i]}" data-i="${i}"><span id="sv${i}">${v[i]}</span><label class="check"><input type="checkbox" class="wave" data-i="${i}"> 1 Hz</label></div>`).join('') +
     '<label class="check" style="margin-top:8px"><input type="checkbox" id="simptt"> Bench button held</label>';
   const push = () => {
     const vals = [...p.querySelectorAll('input[type=range]')].map(r => { $('#sv' + r.dataset.i).textContent = r.value; return +r.value; });
-    api('/api/sim', {v: vals, ptt: $('#simptt').checked ? 1 : 0});
+    const wave = [...p.querySelectorAll('.wave')].filter(c => c.checked).map(c => +c.dataset.i);
+    api('/api/sim', {v: vals, ptt: $('#simptt').checked ? 1 : 0, wave});
   };
   p.querySelectorAll('input').forEach(el => el.oninput = push);
 }
