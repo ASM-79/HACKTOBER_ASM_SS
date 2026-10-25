@@ -4,108 +4,205 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ohmni</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0d0f12;--panel:#15181d;--line:#262a31;--fg:#ecebe6;--mut:#8a8f98;
-  --ok:#3ddc84;--bad:#ff5b4f;--wait:#5d6370;--amber:#ffb627;--lcd:#c8f7a8;
+  --parchment:#fefffc;--paper:#ffffff;--linen:#f9faf7;--ink:#171717;--graphite:#2c2c2c;--charcoal:#444141;
+  --ash:#646464;--fog:#b4b8b4;--mist:#dee2de;--twilight:#282834;--dusk:#1f1f29;--signal:#41a1cf;--cerulean:#0081c0;
+  --ok:#3f8f5a;--fault:#c2483d;
+  --serif:'Fraunces',Georgia,'Times New Roman',serif;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --shadow:0 1px 1px rgba(0,0,0,.08),0 4px 5px rgba(0,0,0,.08);
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 ui-sans-serif,system-ui,-apple-system,sans-serif}
-header{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.logo{font:800 22px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.5px}
-.logo span{color:var(--amber)}
-.conn{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:13px}
-.dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}
-.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
-.spacer{flex:1}
-select,button.sm,input[type=text]{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit}
-button.sm{cursor:pointer}
-main{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;padding:16px 20px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
-.camwrap{position:relative}
-video{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px;background:#000;display:block}
-.camtag{position:absolute;top:10px;left:10px;background:#000a;padding:3px 8px;border-radius:6px;font-size:12px;color:var(--mut)}
-.meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:14px}
-.meter{background:#0a1a0e;border:1px solid #1e3a24;border-radius:10px;padding:10px 14px}
-.meter .lbl{font-size:12px;color:#7fae7f;text-transform:uppercase;letter-spacing:.8px}
-.meter .val{font:600 38px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--lcd);text-shadow:0 0 10px #c8f7a855}
-.meter .val small{font-size:18px;color:#7fae7f}
-.stephead{display:flex;align-items:center;gap:10px;justify-content:space-between}
-.stepn{color:var(--mut);font-size:13px;text-transform:uppercase;letter-spacing:.8px}
-.badge{padding:4px 12px;border-radius:999px;font-weight:700;font-size:13px}
-.badge.ok{background:var(--ok);color:#04130a}
-.badge.fault{background:var(--bad);color:#fff}
-.badge.waiting{background:var(--wait);color:#fff}
-.instr{font-size:18px;margin:10px 0 8px}
-.hint{color:var(--mut);font-size:14px;min-height:20px}
-.navs{display:flex;gap:8px;margin-top:10px}
-#ptt{width:100%;margin-top:14px;padding:20px;font-size:18px;border:0;border-radius:14px;background:var(--amber);color:#1a1200;font-weight:800;cursor:pointer;user-select:none;touch-action:none}
-#ptt.live{background:var(--bad);color:#fff;animation:pulse 1s infinite}
-@keyframes pulse{50%{opacity:.75}}
-.heard{color:var(--mut);font-style:italic;min-height:22px;margin:8px 2px}
-.typed{display:flex;gap:8px}
-.typed input{flex:1}
-#log{margin-top:12px;max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:8px}
-.msg{padding:9px 12px;border-radius:10px;background:#1e2229;max-width:92%}
-.msg.me{align-self:flex-end;background:#2a2f38;color:#c9ccd2}
-.msg.alert{border-left:3px solid var(--bad)}
-.msg.thinking{color:var(--mut)}
-.msg .lat{font-size:11px;color:var(--mut);margin-left:6px}
-#simpanel{display:none;margin-top:14px}
-#simpanel label{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--mut)}
-#simpanel input[type=range]{flex:1}
-.toggle{font-size:13px;color:var(--mut);display:flex;gap:6px;align-items:center}
-@media(max-width:900px){main{grid-template-columns:1fr}}
+[hidden]{display:none !important}
+html,body{margin:0;background:var(--parchment);color:var(--ink);font:400 15px/1.5 var(--sans);letter-spacing:-.01em}
+h1,h2,h3{font-family:var(--serif);font-weight:400;line-height:1.1;letter-spacing:-.02em;color:var(--graphite);margin:0}
+h1{font-size:48px} h2{font-size:27px}
+a{color:var(--signal)}
+button{font-family:var(--sans)}
+.wrap{max-width:1200px;margin:0 auto;padding:16px 24px 80px}
+
+/* nav pill */
+nav.pill{position:sticky;top:16px;z-index:20;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  width:fit-content;max-width:100%;margin:0 auto 32px;padding:8px 12px 8px 24px;border-radius:50px;
+  background:rgba(254,255,252,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.logo{font:400 27px/1.1 var(--serif);letter-spacing:-.02em;color:var(--graphite);margin-right:8px}
+.navfield{display:flex;align-items:center;gap:8px}
+
+/* inputs: no radius, linen fill, bottom border only */
+select,input[type=text]{font:400 15px/1.5 var(--sans);letter-spacing:-.01em;color:var(--ink);background:var(--linen);
+  border:0;border-bottom:1px solid var(--mist);border-radius:0;padding:6px 8px;outline:none;max-width:220px}
+input[type=text]{max-width:none}
+select:focus,input[type=text]:focus{border-bottom-color:var(--twilight)}
+.check{display:inline-flex;align-items:center;gap:8px;font:400 13px/1.5 var(--sans);color:var(--charcoal)}
+input[type=checkbox],input[type=range]{accent-color:var(--twilight)}
+
+/* status pill: the only place ok/fault colors appear, plus the meter edge */
+.status{display:inline-flex;align-items:center;gap:8px;padding:4px 12px;border:1px solid var(--mist);border-radius:50px;
+  background:var(--paper);font:500 13px/1.5 var(--sans);color:var(--charcoal);white-space:nowrap}
+.status .dot{width:8px;height:8px;border-radius:50%;background:var(--fog);flex:none}
+.status.ok .dot{background:var(--ok)}
+.status.fault .dot{background:var(--fault)}
+
+/* layout */
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:24px;align-items:start}
+.bench{grid-column:span 6;display:flex;flex-direction:column;gap:16px;min-width:0}
+.side{grid-column:span 6;min-width:0}
+@media (max-width:899px){.bench,.side{grid-column:span 12}}
+
+.card{background:var(--paper);border:1px solid var(--mist);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
+.label{font:500 13px/1.5 var(--sans);color:var(--ash);letter-spacing:-.01em}
+.helper{font:400 13px/1.5 var(--sans);color:var(--ash)}
+.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.between{justify-content:space-between}
+
+/* buttons: outlined, no shadows, never filled blue */
+.btn{font:500 15px/1 var(--sans);letter-spacing:-.01em;padding:10px 16px;border-radius:8px;background:transparent;
+  border:1px solid var(--signal);color:var(--signal);cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--linen)}
+.btn.secondary{border-color:var(--twilight);color:var(--charcoal)}
+.btn:disabled{border-color:var(--fog);color:var(--fog);cursor:default;background:transparent}
+.btn.small{font-size:13px;padding:6px 12px}
+
+/* camera */
+.cam{position:relative;border-radius:8px;overflow:hidden;background:var(--linen);aspect-ratio:4/3}
+.cam video{width:100%;height:100%;object-fit:cover;display:block}
+.cam .tag{position:absolute;top:12px;left:12px}
+.cam .off{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--ash);font-size:15px}
+
+/* meters */
+.meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
+.meter{border-left:3px solid var(--mist)}
+.meter.ok{border-left-color:var(--ok)}
+.meter.fault{border-left-color:var(--fault)}
+.meter .val{font:500 48px/1.1 var(--sans);font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:var(--graphite);margin-top:4px}
+.meter .val small{font-size:18px;color:var(--ash);font-weight:400}
+
+/* sim panel */
+#simpanel{display:none}
+#simpanel .sl{display:grid;grid-template-columns:32px 1fr 64px auto;gap:12px;align-items:center;font-size:13px;color:var(--charcoal)}
+#simpanel .sl span{font-variant-numeric:tabular-nums;text-align:right}
+
+/* tabs */
+.tabs{display:flex;gap:24px;border-bottom:1px solid var(--mist);margin-bottom:16px}
+.tab{background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:8px 0;cursor:pointer;
+  font:500 16px/1.5 var(--sans);letter-spacing:-.01em;color:var(--ash)}
+.tab.active{color:var(--ink);border-bottom-color:var(--twilight)}
+.pane{display:none;flex-direction:column;gap:16px}
+.pane.active{display:flex}
+
+/* guide */
+.instr{font:400 18px/1.5 var(--sans);color:var(--ink);margin:12px 0 8px}
+.hint{font-size:15px;color:var(--charcoal);min-height:22px}
+#ptt{width:100%;padding:20px;border:0;border-radius:8px;background:var(--dusk);color:var(--parchment);
+  font:500 18px/1.2 var(--sans);letter-spacing:-.01em;cursor:pointer;user-select:none;touch-action:none}
+#ptt.live{background:var(--twilight);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.82}}
+.heard{color:var(--ash);font-style:italic;min-height:22px}
+.log{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow:auto}
+.msg{padding:12px 16px;border-radius:12px;background:var(--paper);border:1px solid var(--mist);max-width:92%;color:var(--ink)}
+.msg.me{align-self:flex-end;background:var(--linen);color:var(--charcoal)}
+.msg.thinking{color:var(--ash)}
+.msg .lat{font-size:13px;color:var(--ash);margin-left:8px;font-variant-numeric:tabular-nums}
+
+/* welcome: the one cerulean atmospheric surface */
+.welcome{background:var(--cerulean);color:var(--parchment);border-radius:24px;padding:40px;display:flex;flex-direction:column;gap:16px}
+.welcome h1{color:var(--parchment)}
+.welcome p{margin:0;font-size:18px;max-width:460px}
+.welcome .btn{border-color:var(--parchment);color:var(--parchment);align-self:flex-start}
+.welcome .btn:hover{background:rgba(254,255,252,.12)}
 </style>
 </head>
 <body>
-<header>
-  <div class="logo">Ohm<span>ni</span></div>
-  <div class="conn"><div id="dot" class="dot"></div><span id="conn">Connecting...</span></div>
-  <div class="spacer"></div>
-  <label class="toggle"><input type="checkbox" id="autohelp" checked> Speak up on faults</label>
-  <select id="lab" title="Lab"></select>
-  <select id="camsel" title="Camera"></select>
-</header>
+<div class="wrap">
+  <nav class="pill">
+    <div class="logo">Ohmni</div>
+    <select id="lab" title="Lab"></select>
+    <select id="camsel" title="Camera"></select>
+    <label class="check"><input type="checkbox" id="autohelp" checked> Speak up on faults</label>
+    <div class="status" id="conn"><span class="dot"></span><span id="conntext">Connecting</span></div>
+  </nav>
 
-<main>
-  <section>
-    <div class="panel">
-      <div class="camwrap">
-        <video id="cam" autoplay playsinline muted></video>
-        <div class="camtag">bench cam</div>
+  <main class="grid">
+    <section class="bench">
+      <div class="card">
+        <div class="cam">
+          <video id="cam" autoplay playsinline muted></video>
+          <div class="off" id="camoff">Camera off. Pick a camera in the bar above.</div>
+          <div class="status tag">Bench camera</div>
+        </div>
       </div>
       <div class="meters" id="meters"></div>
-      <div id="simpanel"></div>
-    </div>
-  </section>
+      <div class="card" id="simpanel"></div>
+    </section>
 
-  <section>
-    <div class="panel">
-      <div class="stephead"><div class="stepn" id="stepn"></div><div id="badge" class="badge waiting">Waiting</div></div>
-      <div class="instr" id="instr"></div>
-      <div class="hint" id="hint"></div>
-      <div class="navs">
-        <button class="sm" id="prev">Back</button>
-        <button class="sm" id="next">Next step</button>
+    <section class="side">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="guide" role="tab">Guide</button>
+        <button class="tab" data-tab="code" role="tab">Code</button>
       </div>
-    </div>
 
-    <button id="ptt">Hold to talk (Space or bench button)</button>
-    <div class="heard" id="heard"></div>
-    <div class="typed"><input type="text" id="typed" placeholder="Or type a question and press Enter"></div>
-    <div id="log"></div>
-  </section>
-</main>
+      <div class="pane active" id="pane-guide">
+        <div class="welcome" id="welcome">
+          <h1>A TA on every bench.</h1>
+          <p>Pick a lab, wire the circuit, and write the code. Ohmni reads the meter, sees the breadboard and checks your sketch together.</p>
+          <button class="btn" id="start">Start the lab &rarr;</button>
+        </div>
+        <div class="card" id="stepcard" hidden>
+          <div class="row between">
+            <div class="label" id="stepn"></div>
+            <div class="status" id="badge"><span class="dot"></span><span id="badgetext">Waiting</span></div>
+          </div>
+          <h2 id="labtitle" style="margin-top:12px"></h2>
+          <div class="instr" id="instr"></div>
+          <div class="hint" id="hint"></div>
+          <div class="row" style="margin-top:16px">
+            <button class="btn secondary" id="prev">&larr; Back</button>
+            <button class="btn" id="next">Next step &rarr;</button>
+          </div>
+        </div>
+        <button id="ptt">Hold to talk (Space or bench button)</button>
+        <div class="heard" id="heard"></div>
+        <input type="text" id="typed" placeholder="Or type a question and press Enter">
+        <div class="log" id="log"></div>
+      </div>
+
+      <div class="pane" id="pane-code">
+        <div class="card">
+          <div class="label">Code</div>
+          <p class="helper">The sketch editor for the target board appears here.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
 <canvas id="snap" hidden></canvas>
 
 <script>
 const $ = s => document.querySelector(s);
 let labs = {}, busy = false, seenAlert = null, lastPtt = 0, simBuilt = false;
+let started = sessionStorage.getItem('ohmni-started') === '1';
 
 async function api(path, body) {
   const r = await fetch(path, body ? {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)} : {});
   return r.json();
+}
+function esc(t) { return String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c])); }
+function setStatus(el, cls, text) { el.className = 'status ' + (cls || ''); el.querySelector('span:last-child').textContent = text; }
+
+/* ---------- tabs ---------- */
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + name));
+  window.dispatchEvent(new Event('ohmni-tab'));
+}
+function showStarted() {
+  $('#welcome').hidden = started; $('#stepcard').hidden = !started;
 }
 
 /* ---------- camera ---------- */
@@ -115,13 +212,15 @@ async function startCam(deviceId) {
     window.camStream = await navigator.mediaDevices.getUserMedia({
       video: deviceId ? {deviceId: {exact: deviceId}} : {width: {ideal: 1280}}, audio: false});
     $('#cam').srcObject = camStream;
-  } catch (e) { console.warn('camera unavailable', e); }
+    $('#camoff').hidden = true;
+  } catch (e) { console.warn('camera unavailable', e); $('#camoff').hidden = false; }
 }
 async function setupCameras() {
   await startCam();
   try {
     const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
     const sel = $('#camsel'); sel.innerHTML = '';
+    if (!devs.length) sel.add(new Option('No camera', ''));
     devs.forEach((d, i) => sel.add(new Option(d.label || ('Camera ' + (i + 1)), d.deviceId)));
     sel.onchange = () => startCam(sel.value);
   } catch (e) {}
@@ -142,20 +241,22 @@ function connectWS() {
 }
 const STATUS_TEXT = {ok: 'Looks good', fault: 'Something is off', waiting: 'Waiting'};
 function render(s) {
-  $('#dot').classList.toggle('on', s.connected);
-  $('#conn').textContent = (s.connected ? (s.sim ? 'Simulated probe' : 'Probe connected') : 'Probe not connected') + ' · ' + s.model;
+  setStatus($('#conn'), s.connected ? 'ok' : 'fault',
+    (s.connected ? (s.sim ? 'Simulated probe' : 'Probe connected') : 'Probe not connected') + ' · ' + s.model);
   const lab = labs[s.lab]; if (!lab) return;
   if ($('#lab').value !== s.lab) $('#lab').value = s.lab;
 
+  const edge = s.status === 'waiting' ? '' : s.status;
   $('#meters').innerHTML = Object.entries(lab.probes).map(([k, name]) => {
     const mv = s.v[+k.slice(1) - 1];
-    return `<div class="meter"><div class="lbl">${k} · ${name}</div><div class="val">${(mv / 1000).toFixed(2)}<small> V</small></div></div>`;
+    return `<div class="card meter ${edge}"><div class="label">${k} · ${esc(name)}</div><div class="val">${(mv / 1000).toFixed(2)}<small> V</small></div></div>`;
   }).join('');
 
   const st = lab.steps[s.step];
-  $('#stepn').textContent = `${lab.title} · Step ${s.step + 1} of ${lab.steps.length}`;
+  $('#stepn').textContent = `Step ${s.step + 1} of ${lab.steps.length}`;
+  $('#labtitle').textContent = lab.title;
   $('#instr').textContent = st.instruction;
-  const b = $('#badge'); b.className = 'badge ' + s.status; b.textContent = s.thinking ? 'Thinking...' : STATUS_TEXT[s.status];
+  setStatus($('#badge'), s.thinking ? '' : edge, s.thinking ? 'Thinking' : STATUS_TEXT[s.status]);
   $('#hint').textContent = s.hint || '';
 
   // bench push-to-talk button
@@ -167,7 +268,7 @@ function render(s) {
   if (seenAlert === null) seenAlert = s.alert_id;
   else if (s.alert_id !== seenAlert) {
     seenAlert = s.alert_id;
-    if ($('#autohelp').checked) ask('', true);
+    if ($('#autohelp').checked && started) ask('', true);
   }
 
   if (s.sim && !simBuilt) buildSim(s.v);
@@ -179,7 +280,7 @@ let rec = null, heard = '', live = false;
 function pttDown() {
   if (live) return; live = true; heard = '';
   speechSynthesis.cancel();
-  $('#ptt').classList.add('live'); $('#ptt').textContent = 'Listening... release to ask';
+  $('#ptt').classList.add('live'); $('#ptt').textContent = 'Listening. Release to ask';
   $('#heard').textContent = '';
   if (!SR) { $('#heard').textContent = 'Voice needs Chrome. Type below instead.'; return; }
   rec = new SR(); rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
@@ -204,12 +305,12 @@ function addMsg(text, cls) {
 }
 async function ask(text, auto) {
   if (busy) return; busy = true;
-  addMsg(auto ? 'Ohmni noticed something on the meter' : text, auto ? 'me alert' : 'me');
-  const pending = addMsg('Looking at your bench...', 'thinking');
+  addMsg(auto ? 'Ohmni noticed something on the meter' : text, 'me');
+  const pending = addMsg('Looking at your bench', 'thinking');
   try {
     const r = await api('/api/ask', {text, auto, image: snap()});
     pending.textContent = r.reply; pending.className = 'msg';
-    const lat = document.createElement('span'); lat.className = 'lat'; lat.textContent = r.latency + 's';
+    const lat = document.createElement('span'); lat.className = 'lat'; lat.textContent = r.latency + ' s';
     pending.appendChild(lat);
     speak(r.reply);
   } catch (e) {
@@ -221,9 +322,9 @@ async function ask(text, auto) {
 function buildSim(v) {
   simBuilt = true;
   const p = $('#simpanel'); p.style.display = 'block';
-  p.innerHTML = '<div class="stepn" style="margin-bottom:6px">Simulated probes (mV)</div>' +
-    [0, 1, 2, 3].map(i => `<label>P${i + 1}<input type="range" min="0" max="3300" step="10" value="${v[i]}" data-i="${i}"><span id="sv${i}">${v[i]}</span></label>`).join('') +
-    '<label><input type="checkbox" id="simptt"> bench button held</label>';
+  p.innerHTML = '<div class="label" style="margin-bottom:8px">Simulated probes, mV (SIM=1)</div>' +
+    [0, 1, 2, 3].map(i => `<div class="sl">P${i + 1}<input type="range" min="0" max="5000" step="10" value="${v[i]}" data-i="${i}"><span id="sv${i}">${v[i]}</span><span></span></div>`).join('') +
+    '<label class="check" style="margin-top:8px"><input type="checkbox" id="simptt"> Bench button held</label>';
   const push = () => {
     const vals = [...p.querySelectorAll('input[type=range]')].map(r => { $('#sv' + r.dataset.i).textContent = r.value; return +r.value; });
     api('/api/sim', {v: vals, ptt: $('#simptt').checked ? 1 : 0});
@@ -236,17 +337,21 @@ async function init() {
   labs = await api('/api/labs');
   const sel = $('#lab');
   for (const [id, l] of Object.entries(labs)) sel.add(new Option(l.title, id));
-  sel.onchange = () => { api('/api/lab', {lab: sel.value}); $('#log').innerHTML = ''; };
+  sel.onchange = () => { api('/api/lab', {lab: sel.value}); $('#log').innerHTML = ''; start(); };
   $('#next').onclick = () => api('/api/step', {delta: 1});
   $('#prev').onclick = () => api('/api/step', {delta: -1});
+  $('#start').onclick = start;
+  document.querySelectorAll('.tab').forEach(t => t.onclick = () => showTab(t.dataset.tab));
+  showStarted();
 
   const ptt = $('#ptt');
   ptt.onpointerdown = pttDown; ptt.onpointerup = pttUp; ptt.onpointerleave = pttUp;
+  const typing = () => ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName) || document.activeElement.closest('.monaco-editor');
   document.addEventListener('keydown', e => {
-    if (e.code === 'Space' && !e.repeat && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); pttDown(); }
+    if (e.code === 'Space' && !e.repeat && !typing()) { e.preventDefault(); pttDown(); }
   });
   document.addEventListener('keyup', e => {
-    if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); pttUp(); }
+    if (e.code === 'Space' && !typing()) { e.preventDefault(); pttUp(); }
   });
   $('#typed').addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.value.trim()) { ask(e.target.value.trim(), false); e.target.value = ''; }
@@ -255,6 +360,7 @@ async function init() {
   connectWS();
   setupCameras();
 }
+function start() { started = true; sessionStorage.setItem('ohmni-started', '1'); showStarted(); }
 init();
 </script>
 </body>
