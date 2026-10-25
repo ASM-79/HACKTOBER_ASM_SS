@@ -121,6 +121,19 @@ def test_button_led():
     assert run(check, [3300, 3300, 3300, 0], h(held, held))[0] == "waiting"
 
 
+def test_expected_values_follow_the_real_rail():
+    """A sagging 3.0 V rail (seen on a hub-powered clone) still gives correct verdicts and numbers."""
+    even, onek = steps("divider")[1], steps("divider")[2]
+    st, note = run(even, [3000, 1500, 0, 0])
+    assert st == "ok" and "expected 1.50 V" in note
+    assert run(onek, [3000, 273, 0, 0])[0] == "ok"
+    assert run(even, [3000, 2990, 0, 0])[1].startswith("Midpoint reads the full rail")
+    st, note = run(steps("led")[1], [3000, 1900, 0, 0])
+    assert st == "ok" and "5.0 mA" in note
+    assert run(steps("button")[2], [3000, 2950, 0, 0])[0] == "ok"
+    assert run(steps("led")[2], [3000, 2950, 0, 0])[0] == "ok"
+
+
 def test_instructions_name_target_board_power():
     for lab in LABS.values():
         assert "target board 3V3" in lab["steps"][0]["instruction"]

@@ -19,6 +19,15 @@ RAIL = 2800    # at or above this = sitting on the + rail
 LOW = 80       # at or below this = basically ground
 
 
+def supply(v):
+    """The real rail voltage. Target boards and clones rarely give exactly 3.3 V, so expected values scale with P1."""
+    return v[0] if v[0] >= RAIL else SUPPLY
+
+
+def near_rail(mv, v):
+    return mv >= 0.85 * supply(v)
+
+
 def spread(hist, i):
     vals = [h[i] for h in hist]
     return statistics.pstdev(vals) if len(vals) > 3 else 0.0
@@ -33,7 +42,7 @@ def fmt(mv):
 def rail_check(v, hist):
     p1 = v[0]
     if p1 >= RAIL:
-        return "ok", "P1 sees the 3.3 V rail."
+        return "ok", f"P1 sees the rail at {fmt(p1)}."
     if p1 <= LOW:
         return "waiting", "P1 reads 0 V. Wire the target board 3V3 pin to the + rail and put P1 on the + rail."
     return "fault", (f"P1 reads {fmt(p1)}, expected 3.3 V. Loose target board 3V3 jumper, P1 in the wrong row, "
@@ -57,23 +66,23 @@ def lost_rail(v):
 # ---------- lab 1: voltage divider ----------
 
 def divider_check(r1, r2):
-    expected = SUPPLY * r2 / (r1 + r2)
-    tol = max(expected * 0.12, 100)
-
     def check(v, hist):
         bad = lost_rail(v)
         if bad:
             return bad
+        rail = supply(v)
+        expected = rail * r2 / (r1 + r2)
+        tol = max(expected * 0.12, 100)
         p2 = v[1]
         if abs(p2 - expected) <= tol:
             return "ok", f"Midpoint {fmt(p2)}, expected {fmt(expected)}."
-        if p2 >= RAIL:
+        if near_rail(p2, v):
             return "fault", ("Midpoint reads the full rail. The bottom resistor R2 is not reaching GND, "
                              "or P2 is sitting on the + rail.")
         if p2 <= LOW:
             return "fault", ("Midpoint reads 0 V. The top resistor R1 is not reaching the + rail, "
                              "or the midpoint row is shorted to GND.")
-        ratio = p2 / max(SUPPLY - p2, 1)
+        ratio = p2 / max(rail - p2, 1)
         return "fault", (f"Midpoint {fmt(p2)}, expected {fmt(expected)}. That implies R2/R1 of about "
                          f"{ratio:.2f} instead of {r2 / r1:.2f}, so a resistor value is probably wrong. "
                          "Color bands: 10k = brown black orange, 1k = brown black red.")
@@ -88,10 +97,10 @@ def led_check(r_ohm):
         if bad:
             return bad
         p2 = v[1]
-        if 1500 <= p2 <= 2600:
-            ma = (SUPPLY - p2) / r_ohm
+        if 1500 <= p2 <= supply(v) - 250:
+            ma = (supply(v) - p2) / r_ohm
             return "ok", f"LED forward voltage {fmt(p2)}, current about {ma:.1f} mA."
-        if p2 >= RAIL:
+        if near_rail(p2, v):
             return "fault", ("No voltage drop across the resistor, so no current flows. The LED is probably "
                              "backwards (short leg goes to GND), not seated, or its GND leg is not in the GND rail.")
         if p2 <= LOW:
@@ -107,7 +116,7 @@ def led_reversed_check(v, hist):
     if bad:
         return bad
     p2 = v[1]
-    if p2 >= RAIL:
+    if near_rail(p2, v):
         return "ok", "LED is reversed and no current flows, which is exactly what this step should show."
     return "waiting", f"Junction still reads {fmt(p2)}, so the LED is still conducting. Flip it around."
 
@@ -119,13 +128,13 @@ def button_released(v, hist):
     if bad:
         return bad
     p2, s = v[1], spread(hist, 1)
-    if s > 150 or (LOW < p2 < RAIL - 300 and s > 50):
+    if s > 150 or (LOW < p2 < supply(v) - 300 and s > 50):
         return "fault", (f"P2 is jumping around ({s:.0f} mV of noise), so the input is floating. "
                          "The 10k pull-down is missing or not reaching GND.")
     if p2 <= 200:
         return "ok", "Reads 0 V while released, so the pull-down works."
-    if p2 >= RAIL:
-        return "fault", ("Reads 3.3 V without pressing. The button is probably rotated 90 degrees: legs on the "
+    if near_rail(p2, v):
+        return "fault", ("Reads the full rail without pressing. The button is probably rotated 90 degrees: legs on the "
                          "same side are always connected. Rotate it so it straddles the center gap.")
     return "fault", f"Reads {fmt(p2)} while released, expected 0 V. Check the pull-down resistor."
 
@@ -135,8 +144,8 @@ def button_pressed(v, hist):
     if bad:
         return bad
     p2 = v[1]
-    if p2 >= RAIL:
-        return "ok", "Reads 3.3 V while pressed. The button works."
+    if near_rail(p2, v):
+        return "ok", f"Reads {fmt(p2)} while pressed. The button works."
     if p2 <= 200:
         return "waiting", ("Still 0 V. Press and hold. If you are already holding it, the button legs are on "
                            "the wrong rows: rotate it 90 degrees.")
