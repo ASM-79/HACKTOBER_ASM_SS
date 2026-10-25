@@ -143,6 +143,132 @@ def button_pressed(v, hist):
     return "fault", f"Reads {fmt(p2)} while pressed, expected 3.3 V. Bad contact, or the pull-down is far below 10k."
 
 
+# ---------- coding labs: the target board runs the student's sketch ----------
+
+HIGH_MV = 2000     # a GPIO driven HIGH by the 3.3 V target reads about 3.3 V
+LOW_MV = 800       # driven LOW reads about 0 V
+MIN_SAMPLES = 20   # 2 s of history before judging a running sketch
+
+
+def level(mv):
+    return "high" if mv >= HIGH_MV else "low" if mv <= LOW_MV else "mid"
+
+
+def transitions(vals):
+    """Count clean HIGH/LOW flips, skipping in-between samples."""
+    last, n = None, 0
+    for x in vals:
+        lv = level(x)
+        if lv == "mid":
+            continue
+        if last is not None and lv != last:
+            n += 1
+        last = lv
+    return n
+
+
+def blink_check(v, hist):
+    bad = lost_rail(v)
+    if bad:
+        return bad
+    p2 = [h[1] for h in hist]
+    if len(p2) < MIN_SAMPLES:
+        return "waiting", "Watching the LED pin for a couple of seconds."
+    flips = transitions(p2)
+    if flips >= 2:
+        return "ok", (f"P2 toggles between {fmt(min(p2))} and {fmt(max(p2))}: {flips} flips in "
+                      f"{len(p2) / 10:.0f} s. The LED is blinking.")
+    levels = {level(x) for x in p2}
+    if levels == {"low"}:
+        return "fault", ("P2 on the LED pin stays at 0 V, so the sketch is not driving this pin. Check that the pin "
+                         "number in the code matches the GPIO the wire goes to, that pinMode makes it an OUTPUT, "
+                         "and that the upload finished.")
+    if levels == {"high"}:
+        return "fault", (f"P2 stays HIGH at {fmt(max(p2))} and never goes LOW. Is there a digitalWrite(..., LOW) "
+                         "with a delay after it? Or the P2 row is on the 3V3 rail instead of the GPIO.")
+    if flips == 1:
+        return "waiting", "Saw one change on P2. Waiting for it to toggle again."
+    return "fault", (f"P2 sits around {fmt(statistics.median(p2))}, neither HIGH nor LOW. The pin may only be weakly "
+                     "pulled (pinMode OUTPUT missing), it toggles faster than the meter can see (use delays of "
+                     "200 ms or more), or P2 is on the LED side of the resistor instead of the GPIO row.")
+
+
+def button_led_check(v, hist):
+    bad = lost_rail(v)
+    if bad:
+        return bad
+    if len(hist) < MIN_SAMPLES:
+        return "waiting", "Press and release the button a few times while Ohmni watches P2 and P3."
+    btn = [level(h[1]) for h in hist]
+    led = [level(h[2]) for h in hist]
+    if spread(hist, 1) > 150 and "mid" in btn:
+        return "fault", (f"The button input P2 is jumping around ({spread(hist, 1):.0f} mV of noise), so it is "
+                         "floating. The 10k pull-down from the GPIO 4 row to GND is missing or loose.")
+    pressed = [l for b, l in zip(btn, led) if b == "high"]
+    released = [l for b, l in zip(btn, led) if b == "low"]
+    if not pressed:
+        if released and all(l == "high" for l in released):
+            return "fault", ("The LED pin P3 is HIGH even though the button is not pressed. The sketch turns the LED "
+                             "on without reading the button, or the logic is inverted.")
+        return "waiting", "P2 has stayed LOW. Press and hold the button for a second, then let go."
+    p_low, p_high = all(l == "low" for l in pressed), all(l == "high" for l in pressed)
+    r_low = bool(released) and all(l == "low" for l in released)
+    r_high = bool(released) and all(l == "high" for l in released)
+    if p_low and not r_high:
+        return "fault", ("The button press reaches P2 (3.3 V), but the LED pin P3 stays at 0 V. Check that the sketch "
+                         "reads BUTTON_PIN with digitalRead, writes LED_PIN, makes LED_PIN an OUTPUT, and that "
+                         "LED_PIN matches the GPIO wired to the LED.")
+    if p_high and r_high:
+        return "fault", ("P3 stays HIGH whether or not the button is pressed. The sketch never turns the LED off, "
+                         "or the P3 row is on the 3V3 rail.")
+    if p_low and r_high:
+        return "fault", ("The LED is on when the button is released and off when it is pressed: the logic is "
+                         "inverted. Look at the if condition in loop().")
+    mism = sum(1 for i in range(len(btn)) if btn[i] != "mid" and led[i] != "mid"
+               and led[i] != btn[i] and (i == 0 or led[i] != btn[i - 1]))
+    if mism > 0.2 * len(btn):
+        return "fault", (f"The LED only sometimes follows the button ({mism} of {len(btn)} readings disagree). "
+                         "A long delay in loop(), or a loose LED wire.")
+    if not r_low:
+        return "waiting", "The LED lights while pressed. Now let go of the button."
+    return "ok", "P3 follows the button on P2: the LED lights while pressed and turns off when released."
+
+
+BLINK_STARTER = """// Blink and measure: blink an LED on the target board and watch probe P2 see it.
+const int LED_PIN = 13;  // the GPIO wired to the 220 ohm resistor and LED
+
+void setup() {
+  Serial.begin(115200);
+  // TODO: set LED_PIN as an OUTPUT with pinMode
+}
+
+void loop() {
+  // TODO: turn the LED on (HIGH), wait 500 ms, turn it off (LOW), wait 500 ms
+  Serial.println("tick");
+  delay(1000);
+}
+"""
+
+BUTTON_STARTER = """// Button to LED: light the LED while the button is pressed.
+const int BUTTON_PIN = 4;  // button input, held LOW by the 10k pull-down
+const int LED_PIN = 13;    // LED through a 220 ohm resistor
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(BUTTON_PIN, INPUT);
+  // TODO: set LED_PIN as an OUTPUT
+}
+
+void loop() {
+  int pressed = LOW;  // TODO: read BUTTON_PIN with digitalRead
+  // TODO: write the LED HIGH while pressed, LOW otherwise
+  Serial.print("button: ");
+  Serial.println(pressed);
+  delay(20);
+}
+"""
+
+
 LABS = {
     "divider": {
         "title": "Voltage Divider",
@@ -183,6 +309,33 @@ LABS = {
              "check": button_released},
             {"instruction": "Now press and hold the button.",
              "check": button_pressed},
+        ],
+    },
+    "blink": {
+        "title": "Blink and Measure",
+        "goal": "Write a first sketch that blinks an LED from the target board, and watch the meter see it.",
+        "probes": {"P1": "+ rail", "P2": "LED pin (GPIO 13 row)"},
+        "steps": [
+            RAIL_STEP,
+            {"instruction": "Wire GPIO 13 of the target board to an empty row and put probe P2 on that row. From that "
+                            "row, run a 220 ohm resistor to a second row, then a red LED from the second row to GND "
+                            "(long leg toward the resistor). In the Code tab, finish the TODOs so the LED blinks once "
+                            "a second, then Compile and Upload.",
+             "check": blink_check, "starter": BLINK_STARTER},
+        ],
+    },
+    "button_led": {
+        "title": "Button to LED",
+        "goal": "Read a button with a pull-down resistor and light an LED only while it is pressed.",
+        "probes": {"P1": "+ rail", "P2": "button input (GPIO 4)", "P3": "LED pin (GPIO 13)"},
+        "steps": [
+            RAIL_STEP,
+            {"instruction": "Put a pushbutton across the center gap. Wire one leg to the + rail (target board 3V3). "
+                            "Wire the opposite leg's row to GPIO 4, and to GND through a 10k pull-down. Put P2 on "
+                            "the GPIO 4 row. Keep the LED on GPIO 13 with its 220 ohm resistor and put P3 on the "
+                            "GPIO 13 row. Finish the TODOs in the Code tab, upload, then press and release the "
+                            "button a few times.",
+             "check": button_led_check, "starter": BUTTON_STARTER},
         ],
     },
 }
