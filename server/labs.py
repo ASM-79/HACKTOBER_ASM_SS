@@ -6,11 +6,15 @@ Each step has an instruction and check(v, hist) -> (status, note).
   status is "ok", "fault", or "waiting"; note is a short plain-English diagnosis.
 
 The math lives here, not in the LLM. Gemma gets the note and explains it.
-The ESP32 ADC saturates around 3.1 V, so the 3.3 V rail reads about 3.1 V.
+Hardware: the student circuit is always powered from the target board's 3V3 pin. The Arduino Uno
+instrument reads 0 to 5 V directly on A0-A3 (10-bit ADC, about 5 mV per step), so the 3.3 V rail reads
+about 3.3 V. RAIL leaves margin for a sagging regulator and the Uno's own 5 V reference tolerance.
+Both boards must share GND or no reading means anything.
 """
 import statistics
 
-SUPPLY = 3300  # mV, ESP32 3V3 pin
+SUPPLY = 3300  # mV, target board 3V3 pin
+HIST_LEN = 40  # readings kept per step (4 s at 10 Hz), enough to see a 1 Hz blink toggle
 RAIL = 2800    # at or above this = sitting on the + rail
 LOW = 80       # at or below this = basically ground
 
@@ -31,12 +35,14 @@ def rail_check(v, hist):
     if p1 >= RAIL:
         return "ok", "P1 sees the 3.3 V rail."
     if p1 <= LOW:
-        return "waiting", "P1 reads 0 V. Wire ESP32 3V3 to the + rail and put P1 on the + rail."
-    return "fault", f"P1 reads {fmt(p1)}, expected 3.3 V. Loose 3V3 jumper, or P1 is in the wrong row."
+        return "waiting", "P1 reads 0 V. Wire the target board 3V3 pin to the + rail and put P1 on the + rail."
+    return "fault", (f"P1 reads {fmt(p1)}, expected 3.3 V. Loose target board 3V3 jumper, P1 in the wrong row, "
+                     "or the Uno and target board do not share GND.")
 
 
 RAIL_STEP = {
-    "instruction": "Wire the ESP32 3V3 pin to the breadboard + rail and GND to the - rail. "
+    "instruction": "Wire the target board 3V3 pin to the breadboard + rail and the target board GND to the - rail. "
+                   "Connect the Uno instrument GND to the same - rail so both boards share ground. "
                    "Put probe P1 on the + rail. Park unused probe wires in the GND rail.",
     "check": rail_check,
 }
@@ -44,7 +50,7 @@ RAIL_STEP = {
 
 def lost_rail(v):
     if v[0] < RAIL:
-        return "fault", f"P1 dropped to {fmt(v[0])}. The + rail lost power: check the 3V3 jumper first."
+        return "fault", f"P1 dropped to {fmt(v[0])}. The + rail lost power: check the target board 3V3 jumper first."
     return None
 
 
@@ -144,7 +150,7 @@ LABS = {
         "probes": {"P1": "+ rail", "P2": "midpoint"},
         "steps": [
             RAIL_STEP,
-            {"instruction": "Place R1 (10k) from the + rail to an empty row. Place R2 (10k) from that row to GND. "
+            {"instruction": "Place R1 (10k) from the + rail (target board 3V3) to an empty row. Place R2 (10k) from that row to GND. "
                             "Move probe P2 to the shared row (the midpoint).",
              "check": divider_check(10_000, 10_000)},
             {"instruction": "Swap R2 for a 1k resistor. Before you look at the meter, say your prediction out loud.",
@@ -157,7 +163,7 @@ LABS = {
         "probes": {"P1": "+ rail", "P2": "resistor/LED junction"},
         "steps": [
             RAIL_STEP,
-            {"instruction": "Place a 220 ohm resistor from the + rail to an empty row. Put a red LED from that row "
+            {"instruction": "Place a 220 ohm resistor from the + rail (target board 3V3) to an empty row. Put a red LED from that row "
                             "to GND: long leg in the resistor's row, short leg (flat side) in GND. Move P2 to the "
                             "resistor/LED row.",
              "check": led_check(220)},
@@ -171,7 +177,7 @@ LABS = {
         "probes": {"P1": "+ rail", "P2": "input node"},
         "steps": [
             RAIL_STEP,
-            {"instruction": "Place a pushbutton across the center gap. Wire one leg to the + rail. Connect the "
+            {"instruction": "Place a pushbutton across the center gap. Wire one leg to the + rail (target board 3V3). Connect the "
                             "opposite leg's row to GND through a 10k resistor (the pull-down). Put P2 on that row. "
                             "Don't press yet.",
              "check": button_released},

@@ -110,6 +110,10 @@ input[type=checkbox],input[type=range]{accent-color:var(--twilight)}
 .msg.thinking{color:var(--ash)}
 .msg .lat{font-size:13px;color:var(--ash);margin-left:8px;font-variant-numeric:tabular-nums}
 
+/* code tab */
+.console{margin:8px 0 0;background:var(--linen);border-bottom:1px solid var(--mist);padding:8px 12px;height:120px;overflow:auto;
+  font:400 13px/1.5 var(--mono);color:var(--charcoal);white-space:pre-wrap;word-break:break-word}
+
 /* welcome: the one cerulean atmospheric surface */
 .welcome{background:var(--cerulean);color:var(--parchment);border-radius:24px;padding:40px;display:flex;flex-direction:column;gap:16px}
 .welcome h1{color:var(--parchment)}
@@ -174,8 +178,25 @@ input[type=checkbox],input[type=range]{accent-color:var(--twilight)}
 
       <div class="pane" id="pane-code">
         <div class="card">
-          <div class="label">Code</div>
-          <p class="helper">The sketch editor for the target board appears here.</p>
+          <div class="row between">
+            <div class="label">Target board</div>
+            <div class="helper" id="instport"></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <select id="fqbn" title="Board"></select>
+            <select id="tport" title="Target port"></select>
+            <button class="btn secondary small" id="refreshports">Refresh ports</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="row between">
+            <div class="label">Serial monitor</div>
+            <div class="row">
+              <select id="baud" title="Baud rate"></select>
+              <button class="btn secondary small" id="clearserial">Clear</button>
+            </div>
+          </div>
+          <pre class="console" id="serial"></pre>
         </div>
       </div>
     </section>
@@ -242,7 +263,10 @@ function connectWS() {
 const STATUS_TEXT = {ok: 'Looks good', fault: 'Something is off', waiting: 'Waiting'};
 function render(s) {
   setStatus($('#conn'), s.connected ? 'ok' : 'fault',
-    (s.connected ? (s.sim ? 'Simulated probe' : 'Probe connected') : 'Probe not connected') + ' · ' + s.model);
+    (s.connected ? (s.sim ? 'Simulated instrument' : 'Instrument connected') : 'Looking for the Uno instrument') + ' · ' + s.model);
+  $('#instport').textContent = s.instrument_port ? 'Instrument (Uno): ' + s.instrument_port : 'Instrument (Uno): not found yet';
+  if (s.serial && s.serial.length) appendSerial(s.serial);
+  if (s.target && s.target.port !== lastTargetPort) { lastTargetPort = s.target.port; loadPorts(); }
   const lab = labs[s.lab]; if (!lab) return;
   if ($('#lab').value !== s.lab) $('#lab').value = s.lab;
 
@@ -332,6 +356,40 @@ function buildSim(v) {
   p.querySelectorAll('input').forEach(el => el.oninput = push);
 }
 
+/* ---------- target board + serial monitor ---------- */
+let lastTargetPort, portsInit = false;
+async function loadPorts() {
+  const r = await api('/api/ports');
+  const fq = $('#fqbn'), tp = $('#tport'), bd = $('#baud');
+  if (!portsInit) {
+    portsInit = true;
+    for (const [id, name] of Object.entries(r.fqbns)) fq.add(new Option(name, id));
+    for (const b of r.bauds) bd.add(new Option(b + ' baud', b));
+    fq.onchange = () => api('/api/target', {fqbn: fq.value});
+    bd.onchange = () => api('/api/target', {baud: +bd.value});
+    tp.onchange = async () => {
+      const res = await api('/api/target', {port: tp.value});
+      if (res.error) { appendSerial(['[ohmni] ' + res.error]); loadPorts(); }
+    };
+  }
+  fq.value = r.target.fqbn; bd.value = r.target.baud;
+  tp.innerHTML = '';
+  tp.add(new Option('Pick the target port', ''));
+  for (const p of r.ports) {
+    const o = new Option(p.device + (p.role === 'instrument' ? ' (Ohmni instrument)' : p.description ? ' (' + p.description + ')' : ''), p.device);
+    o.disabled = p.role === 'instrument';
+    tp.add(o);
+  }
+  tp.value = r.target.port || '';
+}
+function appendSerial(lines) {
+  const el = $('#serial');
+  const stick = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+  el.textContent += lines.join('\n') + '\n';
+  if (el.textContent.length > 20000) el.textContent = el.textContent.slice(-15000);
+  if (stick) el.scrollTop = el.scrollHeight;
+}
+
 /* ---------- wiring up ---------- */
 async function init() {
   labs = await api('/api/labs');
@@ -357,6 +415,9 @@ async function init() {
     if (e.key === 'Enter' && e.target.value.trim()) { ask(e.target.value.trim(), false); e.target.value = ''; }
   });
 
+  $('#refreshports').onclick = loadPorts;
+  $('#clearserial').onclick = () => { $('#serial').textContent = ''; };
+  await loadPorts();
   connectWS();
   setupCameras();
 }
