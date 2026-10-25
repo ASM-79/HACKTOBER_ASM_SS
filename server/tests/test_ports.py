@@ -24,6 +24,7 @@ def test_looks_like_instrument():
 
 def test_candidate_ports():
     ports = [("/dev/cu.Bluetooth-Incoming-Port", "n/a"), ("/dev/cu.usbmodem1101", "Arduino Uno"),
+             ("/dev/cu.usbmodemSN234567892", "USB BillBoard"),
              ("/dev/cu.usbserial-0001", "CP2102 USB to UART"), ("/dev/cu.debug-console", "n/a")]
     assert app.candidate_ports(ports) == ["/dev/cu.usbmodem1101", "/dev/cu.usbserial-0001"]
     assert app.candidate_ports(ports, exclude={"/dev/cu.usbserial-0001"}) == ["/dev/cu.usbmodem1101"]
@@ -53,6 +54,18 @@ def test_sniff_identifies_uno_by_stream(monkeypatch):
     monkeypatch.setattr(app, "SNIFF_S", 0.2)
     assert app.sniff_instrument("/dev/uno") is streams["/dev/uno"]
     assert app.sniff_instrument("/dev/esp") is None and streams["/dev/esp"].closed
+
+
+def test_sniff_tries_uno_baud_then_esp32_baud(monkeypatch):
+    tried = []
+
+    def open_port(dev, baud, timeout=0.3):
+        tried.append(baud)
+        return FakeSerial(UNO if baud == 115200 else ["\x00\xfe garbage"])
+    monkeypatch.setattr(app, "open_port", open_port)
+    monkeypatch.setattr(app, "SNIFF_S", 0.2)
+    monkeypatch.setattr(app, "INSTRUMENT_BAUDS", [57600, 115200])
+    assert app.sniff_instrument("/dev/x") is not None and tried == [57600, 115200]
 
 
 def test_ports_endpoint_and_target(client, monkeypatch):

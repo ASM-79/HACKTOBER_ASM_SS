@@ -7,6 +7,7 @@ Two boards share one breadboard GND:
 Run:   python app.py            (real hardware)
        SIM=1 python app.py      (no hardware: sliders in the UI fake the probe, the target is simulated)
 Env:   INSTRUMENT_PORT=/dev/cu.usbmodem1101  (skip auto-detect; SERIAL_PORT is accepted too)
+       INSTRUMENT_BAUD=57600                 (default: try 57600 for the Uno, then 115200 for the ESP32 probe)
        TARGET_PORT=/dev/cu.usbserial-0001    (preselect the target board port)
        OLLAMA_MODEL=gemma4:e4b               (or gemma4:e2b on weaker laptops)
        OLLAMA_URL=http://localhost:11434     (point at a teammate's laptop to share one model)
@@ -34,6 +35,8 @@ import arduino
 from labs import HIST_LEN, LABS
 
 INSTRUMENT_PORT = os.getenv("INSTRUMENT_PORT") or os.getenv("SERIAL_PORT")
+# Uno firmware streams at 57600, the ESP32 instrument firmware at 115200. Try both unless told.
+INSTRUMENT_BAUDS = [int(os.getenv("INSTRUMENT_BAUD"))] if os.getenv("INSTRUMENT_BAUD") else [57600, 115200]
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 MODEL = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
 SIM = os.getenv("SIM") == "1"
@@ -97,6 +100,7 @@ monitor_released.set()
 
 PORT_KEYS = ("usbserial", "usbmodem", "ttyusb", "ttyacm", "cp210", "ch340", "ch910", "silicon labs", "wch", "uart",
              "arduino", "slab", "wchusb")
+NOT_SERIAL = ("bluetooth", "billboard", "debug-console")  # USB-C hub billboard devices show up as usbmodem ports
 
 
 def parse_probe_line(line: str) -> Optional[dict]:
@@ -126,7 +130,7 @@ def candidate_ports(ports, exclude=()) -> list:
     out = []
     for dev, desc in ports:
         d = f"{dev} {desc}".lower()
-        if dev in exclude or "bluetooth" in d:
+        if dev in exclude or any(k in d for k in NOT_SERIAL):
             continue
         if any(k in d for k in PORT_KEYS):
             out.append(dev)
@@ -226,20 +230,22 @@ def run_instrument(s: serial.Serial, port: str):
 
 
 def sniff_instrument(port: str) -> Optional[serial.Serial]:
-    """Open a port and keep it only if it streams Ohmni probe JSON within SNIFF_S seconds."""
-    try:
-        s = open_port(port, 115200)
-    except Exception:
-        return None
-    lines, t0 = [], time.time()
-    try:
-        while time.time() - t0 < SNIFF_S and not looks_like_instrument(lines):
-            lines.append(s.readline().decode(errors="ignore"))
-    except Exception:
-        pass
-    if looks_like_instrument(lines):
-        return s
-    s.close()
+    """Open a port and keep it only if it streams Ohmni probe JSON within SNIFF_S seconds at a known baud."""
+    for baud in INSTRUMENT_BAUDS:
+        try:
+            s = open_port(port, baud)
+        except Exception:
+            return None
+        lines, t0 = [], time.time()
+        try:
+            while time.time() - t0 < SNIFF_S and not looks_like_instrument(lines):
+                lines.append(s.readline().decode(errors="ignore"))
+        except Exception:
+            pass
+        if looks_like_instrument(lines):
+            print(f"[ohmni] instrument streams at {baud} baud on {port}")
+            return s
+        s.close()
     return None
 
 

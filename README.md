@@ -47,7 +47,7 @@ Both boards plug into the laptop over USB. **The Uno GND and the ESP32 GND must 
 | LED (coding labs) | GPIO 13, 220 ohm, LED, GND | Probe the GPIO 13 row |
 | Button input (Button to LED) | GPIO 4, 10k pull-down to GND | Button from + rail to the GPIO 4 row |
 
-Park unused probe wires in the GND rail so they don't float. The Uno reads 3.3 V correctly, so no dividers are needed. If you only have ESP32s, `firmware/ohmni_probe` turns an ESP32 into the instrument instead (GPIO 34, 35, 32, 33; its ADC tops out near 3.1 V). The server finds the instrument by its JSON stream, not by USB name, so either works.
+Park unused probe wires in the GND rail so they don't float. The Uno reads 3.3 V correctly, so no dividers are needed. The Uno firmware streams at 57600 baud, because CH340 clone Unos garble 115200 on macOS; the server tries 57600 and then 115200 automatically. The Uno measures against its own 5V pin, which is often about 4.6 V on USB power: set `VREF_MV` in the firmware to your board's real 5V (we calibrated ours to 4630 against the 3.3 V rail) or every reading is a few percent high. If you only have ESP32s, `firmware/ohmni_probe` turns an ESP32 into the instrument instead (GPIO 34, 35, 32, 33; its ADC tops out near 3.1 V). The server finds the instrument by its JSON stream, not by USB name, so either works.
 
 ## Setup
 

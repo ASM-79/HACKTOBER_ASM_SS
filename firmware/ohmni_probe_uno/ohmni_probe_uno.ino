@@ -18,13 +18,16 @@ const int LED_GREEN = 5;
 const int LED_RED = 6;
 const int SAMPLES = 16;               // average to kill ADC noise
 const unsigned long PERIOD_MS = 100;  // 10 readings per second
-const long VREF_MV = 5000;            // measure your Uno's 5V pin and put the real value here for best accuracy
+const long BAUD = 57600;              // 115200 garbles on macOS with CH340 clone Unos; 57600 reads cleanly
+// The ADC measures against the Uno's own 5V pin, which is often 4.6 to 4.8 V on USB power.
+// Calibrate: measure the 5V pin with a multimeter (or put P1 on the 3.3 V rail and scale) and put it here.
+const long VREF_MV = 4630;
 
 char ledMode = '0';
 unsigned long lastSend = 0;
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(BAUD);
   pinMode(PTT_PIN, INPUT_PULLUP);
   pinMode(LED_GREEN, OUTPUT);
   pinMode(LED_RED, OUTPUT);
