@@ -7,7 +7,7 @@ def test_index_is_light_design(client):
     for token in ["Fraunces", "Inter", "--parchment:#fefffc", "--signal:#41a1cf", "backdrop-filter", 'data-tab="code"',
                   'data-tab="guide"', "monaco-editor", "codearea"]:
         assert token in html, token
-    assert "#0d0f12" not in html and "—" not in html
+    assert "#0d0f12" not in html and chr(0x2014) not in html
 
 
 def test_labs_endpoint(client):
