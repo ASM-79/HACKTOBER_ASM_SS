@@ -1,0 +1,19 @@
+/goal Ohmni v2 is built to SPEC.md in this repo and every check below has been run, with its real output shown in this conversation. Read SPEC.md and README.md before writing any code; SPEC.md is the source of truth for scope, hardware, design system and rules.
+
+Done means ALL of the following are true and demonstrated:
+
+1. Work is on git branch goal/ohmni-v2, with one commit per milestone in the SPEC.md order. Show `git log --oneline`.
+2. The UI is fully restyled to the SPEC.md design system (light parchment canvas, Fraunces + Inter, frosted nav pill, mist-bordered cards, outlined signal-blue buttons, Guide and Code tabs). No dark theme remains.
+3. The server handles two boards: it identifies the instrument ESP32 by its JSON stream and lets the user pick the target port and board type (ESP32 or Uno), with per-probe scale and a 5 V warning for Uno.
+4. The Code tab has a Monaco editor (textarea fallback), compile and upload through arduino-cli, compiler errors shown as editor line markers, a serial monitor, and missing-tool messages that show the exact install command.
+5. Gemma's prompt includes the sketch, last compile result, recent serial output, probe readings, checker diagnosis and photo. Show a pytest that asserts this.
+6. labs.py has the 3 existing wiring labs plus the 2 coding labs from SPEC.md, each with starter code and a checker.
+7. `cd server && SIM=1 python app.py` starts cleanly and `python -m pytest server/tests -q` passes with 0 failures. Show the full pytest summary line.
+8. Every starter sketch compiles with real arduino-cli for each FQBN whose core is installed. Show the output. If a core or arduino-cli is missing, show the evidence and state it clearly instead of faking it.
+9. The Playwright smoke test passes and saved at least 3 screenshots at 1280x800 in screenshots/ (Guide tab, Code tab after a compile, a fault state). Open each screenshot, check it against the SPEC.md design rules, and fix anything off before finishing.
+10. If `ollama list` shows a gemma4 model, scripts/check_gemma.py has been run and printed a reply and latency.
+11. README.md is updated with arduino-cli setup, two-board wiring, and a demo script that includes the coding feature.
+
+Constraints: never upload to a board or open real serial ports during tests; never execute student code on the laptop; no new paid or cloud APIs; no em dashes in any user-facing text, docs or comments; keep `SIM=1` working after every commit.
+
+Stop and report what is done and what is not if 40 turns pass, or at 6:00pm Pacific today, whichever comes first, so the team has time to demo and submit.

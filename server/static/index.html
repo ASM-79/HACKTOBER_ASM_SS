@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ohmni</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --parchment:#fefffc;--paper:#ffffff;--linen:#f9faf7;--ink:#171717;--graphite:#2c2c2c;--charcoal:#444141;
+  --ash:#646464;--fog:#b4b8b4;--mist:#dee2de;--twilight:#282834;--dusk:#1f1f29;--signal:#41a1cf;--cerulean:#0081c0;
+  --ok:#3f8f5a;--fault:#c2483d;
+  --serif:'Fraunces',Georgia,'Times New Roman',serif;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --shadow:0 1px 1px rgba(0,0,0,.08),0 4px 5px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;background:var(--parchment);color:var(--ink);font:400 15px/1.5 var(--sans);letter-spacing:-.01em}
+h1,h2,h3{font-family:var(--serif);font-weight:400;line-height:1.1;letter-spacing:-.02em;color:var(--graphite);margin:0}
+h1{font-size:48px} h2{font-size:27px}
+a{color:var(--signal)}
+button{font-family:var(--sans)}
+.wrap{max-width:1200px;margin:0 auto;padding:16px 24px 80px}
+
+/* nav pill */
+nav.pill{position:sticky;top:16px;z-index:20;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  width:fit-content;max-width:100%;margin:0 auto 32px;padding:8px 12px 8px 24px;border-radius:50px;
+  background:rgba(254,255,252,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.logo{font:400 27px/1.1 var(--serif);letter-spacing:-.02em;color:var(--graphite);margin-right:8px}
+.navfield{display:flex;align-items:center;gap:8px}
+
+/* inputs: no radius, linen fill, bottom border only */
+select,input[type=text]{font:400 15px/1.5 var(--sans);letter-spacing:-.01em;color:var(--ink);background:var(--linen);
+  border:0;border-bottom:1px solid var(--mist);border-radius:0;padding:6px 8px;outline:none;max-width:220px}
+input[type=text]{max-width:none}
+select:focus,input[type=text]:focus{border-bottom-color:var(--twilight)}
+.check{display:inline-flex;align-items:center;gap:8px;font:400 13px/1.5 var(--sans);color:var(--charcoal)}
+input[type=checkbox],input[type=range]{accent-color:var(--twilight)}
+
+/* status pill: the only place ok/fault colors appear, plus the meter edge */
+.status{display:inline-flex;align-items:center;gap:8px;padding:4px 12px;border:1px solid var(--mist);border-radius:50px;
+  background:var(--paper);font:500 13px/1.5 var(--sans);color:var(--charcoal);white-space:nowrap}
+.status .dot{width:8px;height:8px;border-radius:50%;background:var(--fog);flex:none}
+.status.ok .dot{background:var(--ok)}
+.status.fault .dot{background:var(--fault)}
+
+/* layout */
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:24px;align-items:start}
+.bench{grid-column:span 6;display:flex;flex-direction:column;gap:16px;min-width:0}
+.side{grid-column:span 6;min-width:0}
+@media (max-width:899px){.bench,.side{grid-column:span 12}}
+
+.card{background:var(--paper);border:1px solid var(--mist);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
+.label{font:500 13px/1.5 var(--sans);color:var(--ash);letter-spacing:-.01em}
+.helper{font:400 13px/1.5 var(--sans);color:var(--ash)}
+.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.between{justify-content:space-between}
+
+/* buttons: outlined, no shadows, never filled blue */
+.btn{font:500 15px/1 var(--sans);letter-spacing:-.01em;padding:10px 16px;border-radius:8px;background:transparent;
+  border:1px solid var(--signal);color:var(--signal);cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--linen)}
+.btn.secondary{border-color:var(--twilight);color:var(--charcoal)}
+.btn:disabled{border-color:var(--fog);color:var(--fog);cursor:default;background:transparent}
+.btn.small{font-size:13px;padding:6px 12px}
+
+/* camera */
+.cam{position:relative;border-radius:8px;overflow:hidden;background:var(--linen);aspect-ratio:4/3}
+.cam video{width:100%;height:100%;object-fit:cover;display:block}
+.cam .tag{position:absolute;top:12px;left:12px}
+.cam .off{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--ash);font-size:15px}
+
+/* meters */
+.meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
+.meter{border-left:3px solid var(--mist)}
+.meter.ok{border-left-color:var(--ok)}
+.meter.fault{border-left-color:var(--fault)}
+.meter .val{font:500 48px/1.1 var(--sans);font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:var(--graphite);margin-top:4px}
+.meter .val small{font-size:18px;color:var(--ash);font-weight:400}
+
+/* sim panel */
+#simpanel{display:none}
+#simpanel .sl{display:grid;grid-template-columns:32px 1fr 64px auto;gap:12px;align-items:center;font-size:13px;color:var(--charcoal)}
+#simpanel .sl span{font-variant-numeric:tabular-nums;text-align:right}
+
+/* tabs */
+.tabs{display:flex;gap:24px;border-bottom:1px solid var(--mist);margin-bottom:16px}
+.tab{background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:8px 0;cursor:pointer;
+  font:500 16px/1.5 var(--sans);letter-spacing:-.01em;color:var(--ash)}
+.tab.active{color:var(--ink);border-bottom-color:var(--twilight)}
+.pane{display:none;flex-direction:column;gap:16px}
+.pane.active{display:flex}
+
+/* guide */
+.instr{font:400 18px/1.5 var(--sans);color:var(--ink);margin:12px 0 8px}
+.hint{font-size:15px;color:var(--charcoal);min-height:22px}
+#ptt{width:100%;padding:20px;border:0;border-radius:8px;background:var(--dusk);color:var(--parchment);
+  font:500 18px/1.2 var(--sans);letter-spacing:-.01em;cursor:pointer;user-select:none;touch-action:none}
+#ptt.live{background:var(--twilight);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.82}}
+.heard{color:var(--ash);font-style:italic;min-height:22px}
+.log{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow:auto}
+.msg{padding:12px 16px;border-radius:12px;background:var(--paper);border:1px solid var(--mist);max-width:92%;color:var(--ink)}
+.msg.me{align-self:flex-end;background:var(--linen);color:var(--charcoal)}
+.msg.thinking{color:var(--ash)}
+.msg .lat{font-size:13px;color:var(--ash);margin-left:8px;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* code tab */
+.console{margin:8px 0 0;background:var(--linen);border-bottom:1px solid var(--mist);padding:8px 12px;height:120px;overflow:auto;
+  font:400 13px/1.5 var(--mono);color:var(--charcoal);white-space:pre-wrap;word-break:break-word}
+
+#editor,#codearea{width:100%;height:260px;margin-top:12px;border-bottom:1px solid var(--mist);background:var(--linen)}
+#codearea{display:block;border:0;border-bottom:1px solid var(--mist);border-radius:0;padding:8px 12px;resize:vertical;outline:none;
+  font:400 13px/1.5 var(--mono);color:var(--ink);tab-size:2}
+#problems{display:flex;flex-direction:column;gap:4px;margin-top:12px}
+#problems:empty{display:none}
+.problem{display:flex;gap:8px;align-items:baseline;font-size:13px;color:var(--charcoal);cursor:pointer;background:none;border:0;padding:0;text-align:left}
+.problem .dot{width:8px;height:8px;border-radius:50%;background:var(--fault);flex:none;transform:translateY(-1px)}
+.problem.warning .dot{background:var(--fog)}
+.problem b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.cmd{flex:1;font:400 13px/1.5 var(--mono);background:var(--linen);border-bottom:1px solid var(--mist);padding:8px 12px;color:var(--ink);word-break:break-all}
+#codelog:empty{display:none}
+.errglyph{background:var(--fault);border-radius:50%;width:8px !important;height:8px !important;margin:6px 0 0 6px}
+
+/* welcome: the one cerulean atmospheric surface */
+.welcome{background:var(--cerulean);color:var(--parchment);border-radius:24px;padding:40px;display:flex;flex-direction:column;gap:16px}
+.welcome h1{color:var(--parchment)}
+.welcome p{margin:0;font-size:18px;max-width:460px}
+.welcome .btn{border-color:var(--parchment);color:var(--parchment);align-self:flex-start}
+.welcome .btn:hover{background:rgba(254,255,252,.12)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="pill">
+    <div class="logo">Ohmni</div>
+    <select id="lab" title="Lab"></select>
+    <select id="camsel" title="Camera"></select>
+    <label class="check"><input type="checkbox" id="autohelp" checked> Speak up on faults</label>
+    <div class="status" id="conn"><span class="dot"></span><span id="conntext">Connecting</span></div>
+  </nav>
+
+  <main class="grid">
+    <section class="bench">
+      <div class="card">
+        <div class="cam">
+          <video id="cam" autoplay playsinline muted></video>
+          <div class="off" id="camoff">Camera off. Pick a camera in the bar above.</div>
+          <div class="status tag">Bench camera</div>
+        </div>
+      </div>
+      <div class="meters" id="meters"></div>
+      <div class="card" id="simpanel"></div>
+    </section>
+
+    <section class="side">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="guide" role="tab">Guide</button>
+        <button class="tab" data-tab="code" role="tab">Code</button>
+      </div>
+
+      <div class="pane active" id="pane-guide">
+        <div class="welcome" id="welcome">
+          <h1>A TA on every bench.</h1>
+          <p>Pick a lab, wire the circuit, and write the code. Ohmni reads the meter, sees the breadboard and checks your sketch together.</p>
+          <button class="btn" id="start">Start the lab &rarr;</button>
+        </div>
+        <div class="card" id="stepcard" hidden>
+          <div class="row between">
+            <div class="label" id="stepn"></div>
+            <div class="status" id="badge"><span class="dot"></span><span id="badgetext">Waiting</span></div>
+          </div>
+          <h2 id="labtitle" style="margin-top:12px"></h2>
+          <div class="instr" id="instr"></div>
+          <div class="hint" id="hint"></div>
+          <div class="row" style="margin-top:16px">
+            <button class="btn secondary" id="prev">&larr; Back</button>
+            <button class="btn" id="next">Next step &rarr;</button>
+          </div>
+        </div>
+        <button id="ptt">Hold to talk (Space or bench button)</button>
+        <div class="heard" id="heard"></div>
+        <input type="text" id="typed" placeholder="Or type a question and press Enter">
+        <div class="log" id="log"></div>
+      </div>
+
+      <div class="pane" id="pane-code">
+        <div class="card">
+          <div class="row between">
+            <div class="label">sketch.ino <span id="sketchfor"></span></div>
+            <div class="row">
+              <select id="fqbn" title="Target board"></select>
+              <select id="tport" title="Target board port"></select>
+              <button class="btn secondary small" id="refreshports" title="Refresh ports">Refresh</button>
+            </div>
+          </div>
+          <div id="editor"></div>
+          <textarea id="codearea" spellcheck="false" hidden></textarea>
+          <div class="row" style="margin-top:12px">
+            <button class="btn" id="compile">Compile</button>
+            <button class="btn secondary" id="upload">Upload to target</button>
+            <div class="status" id="buildstatus"><span class="dot"></span><span>Not compiled yet</span></div>
+            <div style="flex:1"></div>
+            <button class="btn secondary small" id="resetcode">Reset to starter</button>
+          </div>
+          <div id="problems"></div>
+        </div>
+        <div class="card">
+          <div class="label">Ask Ohmni about your code and circuit</div>
+          <div class="log" id="codelog" style="margin:8px 0"></div>
+          <input type="text" id="codeq" placeholder="Why doesn't my LED blink? Press Enter to ask">
+        </div>
+        <div class="card" id="toolsmissing" hidden>
+          <div class="label" id="toolsmsg"></div>
+          <p class="helper" style="margin:4px 0 8px">Run this in a terminal, then compile again:</p>
+          <div class="row"><code class="cmd" id="toolscmd"></code><button class="btn secondary small" id="copycmd">Copy</button></div>
+        </div>
+        <div class="card">
+          <div class="label">Compiler output</div>
+          <pre class="console" id="compileout"></pre>
+        </div>
+        <div class="card">
+          <div class="row between">
+            <div class="label">Serial monitor</div>
+            <div class="row">
+              <select id="baud" title="Baud rate"></select>
+              <button class="btn secondary small" id="clearserial">Clear</button>
+            </div>
+          </div>
+          <pre class="console" id="serial"></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<canvas id="snap" hidden></canvas>
+
+<script>
+const $ = s => document.querySelector(s);
+let labs = {}, busy = false, seenAlert = null, lastPtt = 0, simBuilt = false;
+let started = sessionStorage.getItem('ohmni-started') === '1';
+
+async function api(path, body) {
+  const r = await fetch(path, body ? {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)} : {});
+  return r.json();
+}
+function esc(t) { return String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c])); }
+function setStatus(el, cls, text) { el.className = 'status ' + (cls || ''); el.querySelector('span:last-child').textContent = text; }
+
+/* ---------- tabs ---------- */
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + name));
+  window.dispatchEvent(new Event('ohmni-tab'));
+}
+function showStarted() {
+  $('#welcome').hidden = started; $('#stepcard').hidden = !started;
+}
+
+/* ---------- camera ---------- */
+async function startCam(deviceId) {
+  try {
+    if (window.camStream) camStream.getTracks().forEach(t => t.stop());
+    window.camStream = await navigator.mediaDevices.getUserMedia({
+      video: deviceId ? {deviceId: {exact: deviceId}} : {width: {ideal: 1280}}, audio: false});
+    $('#cam').srcObject = camStream;
+    $('#camoff').hidden = true;
+  } catch (e) { console.warn('camera unavailable', e); $('#camoff').hidden = false; }
+}
+async function setupCameras() {
+  await startCam();
+  try {
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    const sel = $('#camsel'); sel.innerHTML = '';
+    if (!devs.length) sel.add(new Option('No camera', ''));
+    devs.forEach((d, i) => sel.add(new Option(d.label || ('Camera ' + (i + 1)), d.deviceId)));
+    sel.onchange = () => startCam(sel.value);
+  } catch (e) {}
+}
+function snap() {
+  const v = $('#cam'); if (!v.videoWidth) return null;
+  const w = 768, h = Math.round(v.videoHeight * w / v.videoWidth);
+  const c = $('#snap'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(v, 0, 0, w, h);
+  return c.toDataURL('image/jpeg', 0.7).split(',')[1];
+}
+
+/* ---------- live state ---------- */
+function connectWS() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = e => render(JSON.parse(e.data));
+  ws.onclose = () => setTimeout(connectWS, 1000);
+}
+const STATUS_TEXT = {ok: 'Looks good', fault: 'Something is off', waiting: 'Waiting'};
+function render(s) {
+  setStatus($('#conn'), s.connected ? 'ok' : 'fault',
+    (s.connected ? (s.sim ? 'Simulated instrument' : 'Instrument on ' + String(s.instrument_port).split('/').pop()) : 'Looking for the Uno instrument') + ' · ' + s.model);
+  if (s.lab !== curLab || s.step !== curStep) loadSketchFor(s.lab, s.step);
+  if (s.serial && s.serial.length) appendSerial(s.serial);
+  if (s.target && s.target.port !== lastTargetPort) { lastTargetPort = s.target.port; loadPorts(); }
+  const lab = labs[s.lab]; if (!lab) return;
+  if ($('#lab').value !== s.lab) $('#lab').value = s.lab;
+
+  const edge = s.status === 'waiting' ? '' : s.status;
+  $('#meters').innerHTML = Object.entries(lab.probes).map(([k, name]) => {
+    const mv = s.v[+k.slice(1) - 1];
+    return `<div class="card meter ${edge}"><div class="label">${k} · ${esc(name)}</div><div class="val">${(mv / 1000).toFixed(2)}<small> V</small></div></div>`;
+  }).join('');
+
+  const st = lab.steps[s.step];
+  $('#stepn').textContent = `Step ${s.step + 1} of ${lab.steps.length}`;
+  $('#labtitle').textContent = lab.title;
+  $('#instr').textContent = st.instruction;
+  setStatus($('#badge'), s.thinking ? '' : edge, s.thinking ? 'Thinking' : STATUS_TEXT[s.status]);
+  $('#hint').textContent = s.hint || '';
+
+  // bench push-to-talk button
+  if (s.ptt && !lastPtt) pttDown();
+  if (!s.ptt && lastPtt) pttUp();
+  lastPtt = s.ptt;
+
+  // proactive help when something breaks
+  if (seenAlert === null) seenAlert = s.alert_id;
+  else if (s.alert_id !== seenAlert) {
+    seenAlert = s.alert_id;
+    if ($('#autohelp').checked && started) ask('', true);
+  }
+
+  if (s.sim && !simBuilt) buildSim(s.v);
+}
+
+/* ---------- voice ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, heard = '', live = false;
+function pttDown() {
+  if (live) return; live = true; heard = '';
+  speechSynthesis.cancel();
+  $('#ptt').classList.add('live'); $('#ptt').textContent = 'Listening. Release to ask';
+  $('#heard').textContent = '';
+  if (!SR) { $('#heard').textContent = 'Voice needs Chrome. Type below instead.'; return; }
+  rec = new SR(); rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = true;
+  rec.onresult = e => { heard = Array.from(e.results).map(r => r[0].transcript).join(' '); $('#heard').textContent = heard; };
+  rec.onend = () => { const t = heard.trim(); rec = null; if (t) ask(t, false); };
+  rec.start();
+}
+function pttUp() {
+  if (!live) return; live = false;
+  $('#ptt').classList.remove('live'); $('#ptt').textContent = 'Hold to talk (Space or bench button)';
+  if (rec) rec.stop();
+}
+function speak(t) {
+  const u = new SpeechSynthesisUtterance(t); u.rate = 1.05;
+  speechSynthesis.speak(u);
+}
+
+/* ---------- asking Gemma ---------- */
+function addMsg(text, cls) {
+  // every message goes to both the Guide conversation and the Code tab helper
+  const els = ['#log', '#codelog'].map(sel => {
+    const d = document.createElement('div'); $(sel).appendChild(d); return d;
+  });
+  const m = {set(t, c, lat) {
+    els.forEach(d => {
+      d.className = 'msg ' + c; d.textContent = t;
+      if (lat !== undefined) { const l = document.createElement('span'); l.className = 'lat'; l.textContent = lat + ' s'; d.appendChild(l); }
+      d.parentElement.scrollTop = 1e9;
+    });
+  }};
+  m.set(text, cls); return m;
+}
+const ASKED = {auto: 'Ohmni noticed something on the meter', compile_hint: 'Compile failed. Ohmni, a hint please'};
+async function ask(text, auto, mode) {
+  if (busy) return; busy = true;
+  mode = auto ? 'auto' : (mode || 'ask');
+  addMsg(ASKED[mode] || text, 'me');
+  const pending = addMsg(mode === 'compile_hint' ? 'Reading the compiler errors' : 'Looking at your bench', 'thinking');
+  try {
+    const r = await api('/api/ask', {text, auto, mode, image: snap(), code: ed.get()});
+    pending.set(r.reply, 'msg', r.latency);
+    speak(r.reply);
+  } catch (e) {
+    pending.set('Error: ' + e, 'msg');
+  } finally { busy = false; }
+}
+
+/* ---------- code editor: Monaco from jsDelivr, textarea if the CDN fails ---------- */
+const MONACO = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs';
+const DEFAULT_SKETCH = '// Sketch for the target board. Compile checks it, Upload sends it to the board.\nvoid setup() {\n  Serial.begin(115200);\n}\n\nvoid loop() {\n}\n';
+let monacoEd = null, curLab = null, curStep = null, saveTimer = null;
+const session = localStorage.getItem('ohmni-session') || (() => {
+  const id = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, '0')).join('');
+  localStorage.setItem('ohmni-session', id); return id;
+})();
+const ed = {
+  get: () => monacoEd ? monacoEd.getValue() : $('#codearea').value,
+  set: t => { if (monacoEd) monacoEd.setValue(t); else $('#codearea').value = t; },
+  markers(errs) {
+    window.ohmniMarkers = errs;
+    if (!monacoEd) return;
+    const model = monacoEd.getModel();
+    monaco.editor.setModelMarkers(model, 'arduino-cli', errs.map(e => {
+      const line = Math.min(Math.max(1, e.line), model.getLineCount());
+      return {startLineNumber: line, endLineNumber: line, startColumn: e.col || 1, endColumn: model.getLineMaxColumn(line),
+              message: e.message, severity: e.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error};
+    }));
+    this.decos = monacoEd.deltaDecorations(this.decos || [], errs.filter(e => e.severity === 'error').map(e => ({
+      range: new monaco.Range(e.line, 1, e.line, 1), options: {glyphMarginClassName: 'errglyph', glyphMarginHoverMessage: {value: e.message}}})));
+  },
+  reveal(line) {
+    if (monacoEd) { monacoEd.revealLineInCenter(line); monacoEd.setPosition({lineNumber: line, column: 1}); monacoEd.focus(); }
+    else { const ta = $('#codearea'), pos = ta.value.split('\n').slice(0, line - 1).join('\n').length + (line > 1 ? 1 : 0); ta.focus(); ta.setSelectionRange(pos, pos); }
+  },
+};
+function loadMonaco() {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Monaco timed out')), 8000);
+    window.MonacoEnvironment = {getWorkerUrl: () => 'data:text/javascript;charset=utf-8,' + encodeURIComponent(
+      `self.MonacoEnvironment={baseUrl:'${MONACO}/../'};importScripts('${MONACO}/base/worker/workerMain.js');`)};
+    const s = document.createElement('script'); s.src = MONACO + '/loader.js';
+    s.onerror = () => { clearTimeout(timer); reject(new Error('Monaco CDN unreachable')); };
+    s.onload = () => {
+      require.config({paths: {vs: MONACO}});
+      require(['vs/editor/editor.main'], () => { clearTimeout(timer); resolve(window.monaco); }, err => { clearTimeout(timer); reject(err); });
+    };
+    document.head.appendChild(s);
+  });
+}
+async function setupEditor() {
+  try {
+    await loadMonaco();
+    const initial = $('#codearea').value || DEFAULT_SKETCH;
+    monaco.editor.defineTheme('ohmni', {base: 'vs', inherit: true, rules: [
+      {token: '', foreground: '171717'}, {token: 'comment', foreground: '646464', fontStyle: 'italic'},
+      {token: 'keyword', foreground: '0081c0'}, {token: 'type', foreground: '282834', fontStyle: 'bold'},
+      {token: 'string', foreground: '444141'}, {token: 'number', foreground: '2c2c2c'}, {token: 'delimiter', foreground: '444141'}],
+      colors: {'editor.background': '#f9faf7', 'editor.lineHighlightBackground': '#fefffc', 'editorLineNumber.foreground': '#b4b8b4',
+        'editorLineNumber.activeForeground': '#444141', 'editorCursor.foreground': '#282834', 'editor.selectionBackground': '#dee2de',
+        'editorError.foreground': '#c2483d', 'editorWarning.foreground': '#646464',
+        'editorOverviewRuler.errorForeground': '#c2483d', 'editorOverviewRuler.warningForeground': '#b4b8b4',
+        'editorOverviewRuler.border': '#dee2de', 'scrollbarSlider.background': '#dee2de80', 'editorGutter.background': '#f9faf7'}});
+    monacoEd = monaco.editor.create($('#editor'), {value: initial, language: 'cpp', theme: 'ohmni', minimap: {enabled: false},
+      fontSize: 13, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', glyphMargin: true,
+      scrollBeyondLastLine: false, automaticLayout: true, tabSize: 2, renderLineHighlight: 'line', lineNumbersMinChars: 3});
+    monacoEd.onDidChangeModelContent(saveSoon);
+    window.ohmniEditor = 'monaco';
+  } catch (e) {
+    console.warn('Monaco unavailable, using the plain editor', e);
+    $('#editor').hidden = true; $('#codearea').hidden = false;
+    if (!$('#codearea').value) $('#codearea').value = DEFAULT_SKETCH;
+    $('#codearea').addEventListener('input', saveSoon);
+    $('#codearea').addEventListener('keydown', e => {
+      if (e.key === 'Tab') { e.preventDefault(); document.execCommand('insertText', false, '  '); }
+    });
+    window.ohmniEditor = 'textarea';
+  }
+  if (window.ohmniMarkers) ed.markers(window.ohmniMarkers);
+}
+function starterFor(lab, step) {
+  const l = labs[lab]; if (!l) return DEFAULT_SKETCH;
+  const st = l.steps[step] && l.steps[step].starter;
+  if (st) return st;
+  for (let i = step; i >= 0; i--) if (l.steps[i].starter) return l.steps[i].starter;
+  return DEFAULT_SKETCH;
+}
+function sketchKey() { return `ohmni-code:${curLab}:${curStep}`; }
+function loadSketchFor(lab, step) {
+  curLab = lab; curStep = step;
+  ed.set(localStorage.getItem(sketchKey()) || starterFor(lab, step));
+  $('#sketchfor').textContent = labs[lab] ? '· ' + labs[lab].title + ', step ' + (step + 1) : '';
+  ed.markers([]); $('#problems').innerHTML = '';
+}
+function saveSoon() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { if (curLab !== null) localStorage.setItem(sketchKey(), ed.get()); }, 400);
+}
+
+/* ---------- compile and upload through arduino-cli ---------- */
+async function streamPost(path, body, onEvent) {
+  const r = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const {value, done} = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, {stream: true});
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) { const ln = buf.slice(0, i); buf = buf.slice(i + 1); if (ln.trim()) onEvent(JSON.parse(ln)); }
+  }
+  if (buf.trim()) onEvent(JSON.parse(buf));
+}
+function showProblems(errs) {
+  const p = $('#problems'); p.innerHTML = '';
+  errs.forEach(e => {
+    const b = document.createElement('button'); b.className = 'problem ' + e.severity;
+    b.innerHTML = `<span class="dot"></span><b>Line ${e.line}</b><span>${esc(e.message)}</span>`;
+    b.onclick = () => ed.reveal(e.line);
+    p.appendChild(b);
+  });
+}
+function showMissing(r) {
+  $('#toolsmissing').hidden = !r.install;
+  if (r.install) { $('#toolsmsg').textContent = r.message; $('#toolscmd').textContent = r.install; }
+}
+let building = false;
+async function build(kind) {
+  if (building) return; building = true;
+  const out = $('#compileout'), bs = $('#buildstatus');
+  $('#compile').disabled = $('#upload').disabled = true;
+  out.textContent = ''; showProblems([]); ed.markers([]);
+  setStatus(bs, '', kind === 'upload' ? 'Compiling, then uploading' : 'Compiling');
+  saveSoon();
+  let result = null;
+  try {
+    await streamPost('/api/' + kind, {session, code: ed.get(), fqbn: $('#fqbn').value}, ev => {
+      if (ev.type === 'start') out.textContent += '$ ' + ev.cmd + '\n';
+      else if (ev.type === 'out') { out.textContent += ev.text + '\n'; out.scrollTop = out.scrollHeight; }
+      else if (ev.type === 'result') result = ev;
+    });
+  } catch (e) { result = {ok: false, errors: [], message: 'Lost the server: ' + e}; }
+  building = false; $('#compile').disabled = $('#upload').disabled = false;
+  if (!result) return;
+  showMissing(result);
+  const errs = result.errors || [], nErr = errs.filter(e => e.severity === 'error').length;
+  ed.markers(errs); showProblems(errs);
+  if (result.message) out.textContent += result.message + '\n';
+  if (result.ok) setStatus(bs, 'ok', kind === 'upload' ? (result.sim ? 'Uploaded (simulated)' : 'Uploaded') : `Compiled in ${result.seconds} s`);
+  else if (result.install) setStatus(bs, 'fault', 'Tool missing');
+  else setStatus(bs, 'fault', nErr ? `${nErr} error${nErr > 1 ? 's' : ''}` : (kind === 'upload' && result.stage === 'upload' ? 'Upload failed' : 'Compile failed'));
+  if (!result.ok && nErr && $('#autohelp').checked) ask('', false, 'compile_hint');
+}
+
+/* ---------- sim sliders (SIM=1 only) ---------- */
+function buildSim(v) {
+  simBuilt = true;
+  const p = $('#simpanel'); p.style.display = 'block';
+  p.innerHTML = '<div class="label" style="margin-bottom:8px">Simulated probes, mV (SIM=1)</div>' +
+    [0, 1, 2, 3].map(i => `<div class="sl">P${i + 1}<input type="range" min="0" max="5000" step="10" value="${v[i]}" data-i="${i}"><span id="sv${i}">${v[i]}</span><label class="check"><input type="checkbox" class="wave" data-i="${i}"> 1 Hz</label></div>`).join('') +
+    '<label class="check" style="margin-top:8px"><input type="checkbox" id="simptt"> Bench button held</label>';
+  const push = () => {
+    const vals = [...p.querySelectorAll('input[type=range]')].map(r => { $('#sv' + r.dataset.i).textContent = r.value; return +r.value; });
+    const wave = [...p.querySelectorAll('.wave')].filter(c => c.checked).map(c => +c.dataset.i);
+    api('/api/sim', {v: vals, ptt: $('#simptt').checked ? 1 : 0, wave});
+  };
+  p.querySelectorAll('input').forEach(el => el.oninput = push);
+}
+
+/* ---------- target board + serial monitor ---------- */
+let lastTargetPort, portsInit = false;
+async function loadPorts() {
+  const r = await api('/api/ports');
+  const fq = $('#fqbn'), tp = $('#tport'), bd = $('#baud');
+  if (!portsInit) {
+    portsInit = true;
+    for (const [id, name] of Object.entries(r.fqbns)) fq.add(new Option(name, id));
+    for (const b of r.bauds) bd.add(new Option(b + ' baud', b));
+    fq.onchange = () => {
+      api('/api/target', {fqbn: fq.value});
+      api('/api/tools?fqbn=' + encodeURIComponent(fq.value)).then(r => showMissing(r.ok ? {} : r));
+    };
+    bd.onchange = () => api('/api/target', {baud: +bd.value});
+    tp.onchange = async () => {
+      const res = await api('/api/target', {port: tp.value});
+      if (res.error) { appendSerial(['[ohmni] ' + res.error]); loadPorts(); }
+    };
+  }
+  fq.value = r.target.fqbn; bd.value = r.target.baud;
+  tp.innerHTML = '';
+  tp.add(new Option('Pick the target port', ''));
+  for (const p of r.ports) {
+    const o = new Option(p.device + (p.role === 'instrument' ? ' (Ohmni instrument)' : p.description ? ' (' + p.description + ')' : ''), p.device);
+    o.disabled = p.role === 'instrument';
+    tp.add(o);
+  }
+  tp.value = r.target.port || '';
+}
+function appendSerial(lines) {
+  const el = $('#serial');
+  const stick = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+  el.textContent += lines.join('\n') + '\n';
+  if (el.textContent.length > 20000) el.textContent = el.textContent.slice(-15000);
+  if (stick) el.scrollTop = el.scrollHeight;
+}
+
+/* ---------- wiring up ---------- */
+async function init() {
+  labs = await api('/api/labs');
+  const sel = $('#lab');
+  for (const [id, l] of Object.entries(labs)) sel.add(new Option(l.title, id));
+  sel.onchange = () => { api('/api/lab', {lab: sel.value}); $('#log').innerHTML = ''; start(); };
+  $('#next').onclick = () => api('/api/step', {delta: 1});
+  $('#prev').onclick = () => api('/api/step', {delta: -1});
+  $('#start').onclick = start;
+  document.querySelectorAll('.tab').forEach(t => t.onclick = () => showTab(t.dataset.tab));
+  showStarted();
+
+  const ptt = $('#ptt');
+  ptt.onpointerdown = pttDown; ptt.onpointerup = pttUp; ptt.onpointerleave = pttUp;
+  const typing = () => ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName) || document.activeElement.closest('.monaco-editor');
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && !e.repeat && !typing()) { e.preventDefault(); pttDown(); }
+  });
+  document.addEventListener('keyup', e => {
+    if (e.code === 'Space' && !typing()) { e.preventDefault(); pttUp(); }
+  });
+  $('#typed').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.value.trim()) { ask(e.target.value.trim(), false); e.target.value = ''; }
+  });
+
+  $('#compile').onclick = () => build('compile');
+  $('#upload').onclick = () => build('upload');
+  $('#resetcode').onclick = () => { ed.set(starterFor(curLab, curStep)); saveSoon(); };
+  $('#copycmd').onclick = () => navigator.clipboard && navigator.clipboard.writeText($('#toolscmd').textContent);
+  $('#codeq').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.value.trim()) { ask(e.target.value.trim(), false); e.target.value = ''; }
+  });
+  api('/api/tools?fqbn=esp32:esp32:esp32').then(r => { if (!r.ok) showMissing(r); });
+  setupEditor();
+  $('#refreshports').onclick = loadPorts;
+  $('#clearserial').onclick = () => { $('#serial').textContent = ''; };
+  await loadPorts();
+  connectWS();
+  setupCameras();
+}
+function start() { started = true; sessionStorage.setItem('ohmni-started', '1'); showStarted(); }
+init();
+</script>
+</body>
+</html>
